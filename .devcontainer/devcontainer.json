@@ -2,14 +2,9 @@
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
 	"name": "SmartSpace Flows",
-	"dockerComposeFile": [
-		"docker-compose.yml"
-	],
-	"service": "smartspace-flows",
-	"runServices": [
-		"smartspace-flows"
-	],
-	"workspaceFolder": "/workspace",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "devcontainer",
+    "workspaceFolder": "/workspace",
 	"containerEnv": {
 		"PYTHONPATH": "/workspace"
 	},
@@ -32,11 +27,5 @@
 			]
 		}
 	},
-	"portsAttributes": {
-		"8080": {
-			"label": "SmartSpace Flows",
-			"onAutoForward": "notify"
-		}
-	},
-	"shutdownAction": "stopCompose"
+	"postCreateCommand": "bash .devcontainer/setup.sh"
 }
