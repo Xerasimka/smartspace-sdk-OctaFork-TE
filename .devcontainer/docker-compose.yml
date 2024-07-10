@@ -1,0 +1,16 @@
+version: "3"
+
+services:
+  smartspace-flows:
+    image: smartspace-flows
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+
+    volumes:
+      - .:/workspace:cached
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: /bin/sh -c "while sleep 1000; do :; done"
