@@ -43,6 +43,7 @@ from smartspace.models import (
     ToolInterface,
     ToolOutputDefinition,
 )
+from smartspace.utils import my_issubclass
 
 B = TypeVar("B", bound="Block")
 S = TypeVar("S")
@@ -58,11 +59,11 @@ def _issubclass(cls, base):
 @lru_cache(maxsize=1000)
 def _get_parameter_names_and_types(callable: Callable):
     signature = inspect.signature(callable)
-    return [
-        (name, param.annotation)
+    return {
+        name: param.annotation
         for name, param in signature.parameters.items()
         if name != "self"
-    ]
+    }
 
 
 @lru_cache(maxsize=1000)
@@ -87,7 +88,7 @@ def _get_input_interfaces(callable: Callable) -> dict[str, "InputInterface"]:
                 ]
             ),
         )
-        for name, annotation in _get_parameter_names_and_types(callable)
+        for name, annotation in _get_parameter_names_and_types(callable).items()
     }
 
 
@@ -286,7 +287,18 @@ class Block:
             )
 
         for config_name, config_definition in self._definition.configs.items():
-            setattr(self, config_name, config_definition.value)
+            field_type = self.__class__.__annotations__[config_name]
+            config_type = field_type.__args__[0]
+
+            if my_issubclass(config_type, BaseModel):
+                config_type = cast(type[BaseModel], config_type)
+                setattr(
+                    self,
+                    config_name,
+                    config_type.model_validate(config_definition.value),
+                )
+            else:
+                setattr(self, config_name, config_definition.value)
 
         tool_groups: dict[str, dict[str, Tool]] = {}
 
@@ -484,7 +496,26 @@ class StepInstance(Generic[B, P, T]):
         return self.step.name
 
     async def run(self, *args: P.args, **kwargs: P.kwargs) -> T:
-        result = await self.step._fn(self.parent_block, *args, **kwargs)
+        input_types = self.step.input_types()
+        step_kwargs: dict[str, Any] = {}
+
+        for input_name, value in kwargs.items():
+            input_type = input_types[input_name]
+            o = get_origin(input_type)
+            if my_issubclass(input_type, BaseModel):
+                input_type = cast(type[BaseModel], input_type)
+                step_kwargs[input_name] = input_type.model_validate(value)
+            elif o is list:
+                value = cast(list[Any], value)
+                item_type: type = input_type.__args__[0]
+                if my_issubclass(item_type, BaseModel):
+                    step_kwargs[input_name] = [item_type.validate(v) for v in value]
+                else:
+                    step_kwargs[input_name] = value
+            else:
+                step_kwargs[input_name] = value
+
+        result = await self.step._fn(self.parent_block, *tuple(), **kwargs)
         if self.output:
             self.output.emit(result)
         return result
@@ -522,6 +553,9 @@ class Step(Generic[B, P, T]):
             inputs=_get_input_interfaces(self._fn),
             output_ref=self._output_name if output_interface else None,
         )
+
+    def input_types(self) -> dict[str, Type]:
+        return _get_parameter_names_and_types(self._fn)
 
     async def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         raise Exception(
