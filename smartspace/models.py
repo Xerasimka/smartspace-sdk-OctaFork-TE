@@ -122,7 +122,7 @@ class StepInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     name: str
-    inputs: Annotated[list[InputInterface], Field(min_length=1)]
+    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
     output_ref: Annotated[str | None, Field(None, alias="outputRef")]
 
     @model_serializer

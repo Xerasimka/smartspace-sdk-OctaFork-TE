@@ -519,7 +519,7 @@ class Step(Generic[B, P, T]):
         output_interface = self.output_interface()
         return StepInterface(
             name=self.name,
-            inputs=list(_get_input_interfaces(self._fn).values()),
+            inputs=_get_input_interfaces(self._fn),
             output_ref=self._output_name if output_interface else None,
         )
 
