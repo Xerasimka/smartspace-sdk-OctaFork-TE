@@ -2,8 +2,8 @@ import abc
 import asyncio
 import inspect
 import json
+from dataclasses import dataclass
 from functools import lru_cache
-from types import SimpleNamespace
 from typing import (
     Annotated,
     Any,
@@ -24,7 +24,6 @@ from typing_extensions import get_origin
 
 from smartspace.models import (
     BlockInterface,
-    BlockType,
     CallbackCall,
     ConfigInterface,
     FlowValue,
@@ -70,7 +69,15 @@ def _get_return_type(callable: Callable):
 def _get_input_interfaces(callable: Callable) -> dict[str, "InputInterface"]:
     return {
         name: InputInterface(
-            name=name, json_schema=TypeAdapter(annotation).json_schema()
+            name=name,
+            json_schema=TypeAdapter(annotation).json_schema(),
+            sticky=any(
+                [
+                    metadata.sticky
+                    for metadata in getattr(annotation, "__metadata__", [])
+                    if type(metadata) is InputConfig
+                ]
+            ),
         )
         for name, annotation in _get_parameter_names_and_types(callable)
     }
@@ -106,58 +113,60 @@ def _get_configs(cls) -> list["ConfigInterface"]:
     return configs
 
 
-class InputDefinition(SimpleNamespace):
+@dataclass
+class InputDefinition:
     id: str
     json_schema: dict[str, Any]
-    type: Type
     sticky: bool
 
 
-class OutputDefinition(SimpleNamespace):
+@dataclass
+class OutputDefinition:
     id: str
     json_schema: dict[str, Any]
 
 
+@dataclass
 class ToolInputDefinition(OutputDefinition):
     tool_id: str
 
 
-class ToolOutputDefinition(SimpleNamespace):
+@dataclass
+class ToolOutputDefinition:
     id: str
     tool_id: str
     json_schema: dict[str, Any]
 
 
-class StepDefinition(SimpleNamespace):
+@dataclass
+class StepDefinition:
     id: str
-    step: "Step"
     inputs: dict[str, InputDefinition]
     output: OutputDefinition | None
 
 
-class ConfigDefinition(SimpleNamespace):
+@dataclass
+class ConfigDefinition:
     id: str
     value: Any
 
 
-class ToolDefinition(SimpleNamespace):
+@dataclass
+class ToolDefinition:
     id: str
-    type: Type["Tool"]
     inputs: dict[str, ToolInputDefinition]
     output: ToolOutputDefinition | None
     configs: dict[str, ConfigDefinition]
 
 
-class BlockDefinition(SimpleNamespace):
+@dataclass
+class BlockDefinition:
     id: str
-    version: BlockType
-    type: Type["Block"]
+    version: str
     configs: dict[str, ConfigDefinition]
     outputs: dict[str, OutputDefinition]
     steps: dict[str, StepDefinition]
-    all_tools: dict[str, ToolDefinition]
-    single_tools: dict[str, ToolDefinition]
-    tool_dicts: dict[str, dict[str, ToolDefinition]]
+    tools: dict[str, ToolDefinition]
 
 
 class ValueSource:
@@ -276,34 +285,36 @@ class ToolInput(Output):
 
 class FlowContext:
     def __init__(
-        self, workspace: SmartSpaceWorkspace, message_history: list[ThreadMessage]
+        self,
+        workspace: SmartSpaceWorkspace | None,
+        message_history: list[ThreadMessage] | None,
     ):
         self.workspace = workspace
         self.message_history = message_history
 
 
 class Block:
-    """
-    A block is the main unit of a SmartSpace flow. Blocks can have inputs, outputs, methods, and steps.
-    """
-
     def __init__(
         self,
-        definition: BlockDefinition,
-        states: dict[str, Any],
-        flow_context: FlowContext,
+        definition: BlockDefinition | None = None,
+        states: dict[str, Any] | None = None,
+        flow_context: FlowContext | None = None,
     ):
+        if not definition:
+            definition = self.get_default_definition()
+
         self.id = definition.id
         self._definition = definition
-        self.workspace = flow_context.workspace
-        self.message_history = flow_context.message_history
+        self.workspace = flow_context.workspace if flow_context else None
+        self.message_history = flow_context.message_history if flow_context else None
 
         self._outputs: dict[str, Output | ToolInput] = {}
         self._steps_instances: dict[str, StepInstance] = {}
         self._tools: dict[str, Tool] = {}
 
-        for state_id, state_value in states.items():
-            setattr(self, state_id, state_value)
+        if states:
+            for state_id, state_value in states.items():
+                setattr(self, state_id, state_value)
 
         for output_name, output_definition in self._definition.outputs.items():
             if type(output_definition) is OutputDefinition:
@@ -323,37 +334,44 @@ class Block:
         for config_name, config_definition in self._definition.configs.items():
             setattr(self, config_name, config_definition.value)
 
-        for tool_name, tool_definition in self._definition.single_tools.items():
+        tool_groups: dict[str, dict[str, Tool]] = {}
+
+        for tool_name, tool_definition in self._definition.tools.items():
             inputs = {
                 name: ToolInput(input_definition)
                 for name, input_definition in tool_definition.inputs.items()
             }
-            self._tools[tool_name] = tool_definition.type(tool_definition, inputs)
+            tool_type = self._get_tool_type(tool_name)
+            self._tools[tool_name] = tool_type(tool_definition, inputs)
 
             for tool_input in inputs.values():
                 self._outputs[f"{tool_name}.{tool_input.id}"] = tool_input
 
-            setattr(self, tool_name, self._tools[tool_name])
+            tool_path = tool_name.split(".")
+            if len(tool_path) == 1:
+                setattr(self, tool_name, self._tools[tool_name])
+            else:
+                if tool_path[0] not in tool_groups:
+                    tool_groups[tool_path[0]] = {}
+
+                tool_groups[tool_path[0]][tool_path[1]] = self._tools[tool_name]
 
         for (
             tool_attribute_name,
-            tool_definitions,
-        ) in self._definition.tool_dicts.items():
-            tool_dict: dict[str, Tool] = {}
-            for tool_name, tool_definition in tool_definitions.items():
-                inputs = {
-                    name: ToolInput(input_definition)
-                    for name, input_definition in tool_definition.inputs.items()
-                }
-                self._tools[tool_definition.id] = tool_definition.type(
-                    tool_definition, inputs
-                )
-                tool_dict[tool_name] = self._tools[tool_definition.id]
+            tool_group,
+        ) in tool_groups.items():
+            setattr(self, tool_attribute_name, tool_group)
 
-                for tool_input in inputs.values():
-                    self._outputs[f"{tool_definition.id}.{tool_input.id}"] = tool_input
-
-            setattr(self, tool_attribute_name, tool_dict)
+    @classmethod
+    def get_default_definition(cls) -> BlockDefinition:
+        return BlockDefinition(  # TODO get actual configs, outputs, steps, etc
+            id=cls.__name__,
+            version="dev",
+            configs={},
+            outputs={},
+            steps={},
+            tools={},
+        )
 
     @classmethod
     @lru_cache(maxsize=1000)
@@ -369,8 +387,8 @@ class Block:
         return states
 
     @classmethod
-    @lru_cache(maxsize=1000)
-    def steps(cls) -> dict[str, "Step"]:
+    @lru_cache(maxsize=1)
+    def _get_steps(cls) -> dict[str, "Step"]:
         steps: dict[str, Step] = {}
 
         for attribute_name in dir(cls):
@@ -386,6 +404,14 @@ class Block:
                 steps[attribute_name] = cast(Step, attribute)
 
         return steps
+
+    def _get_tool_type(self, tool_id: str) -> "type[Tool]":
+        attribute_name = tool_id.split(".")[0]
+        tool_type = self.__class__.__annotations__[attribute_name]
+        if _issubclass(tool_type, Tool):
+            return tool_type
+        else:
+            return tool_type.__args__[1]
 
     @classmethod
     def interface(cls, version: str = "unknown") -> BlockInterface:
@@ -439,6 +465,7 @@ class Block:
             tools=tools,
             configs=configs,
         )
+
         return block_interface
 
 
@@ -517,7 +544,7 @@ class StepInstance(Generic[B, P, T]):
     def __init__(
         self, parent_block: B, definition: StepDefinition, output: Output[T] | None
     ):
-        self.step = cast(Step[B, P, T], definition.step)
+        self.step = cast(Step[B, P, T], getattr(parent_block, definition.id))
         self.output = output
         self.parent_block: B = parent_block
 

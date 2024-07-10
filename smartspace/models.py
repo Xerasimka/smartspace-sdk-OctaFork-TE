@@ -93,7 +93,8 @@ class IOCInterface(BaseModel):
         return []
 
 
-class InputInterface(IOCInterface): ...
+class InputInterface(IOCInterface):
+    sticky: bool
 
 
 class OutputInterface(IOCInterface): ...
