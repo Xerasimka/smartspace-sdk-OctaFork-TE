@@ -512,3 +512,59 @@ class SmartSpaceWorkspace(BaseModel):
     @property
     def dataspace_ids(self) -> list[str]:
         return [dataspace.id for dataspace in self.data_spaces]
+
+
+class InputDefinition(BaseModel):
+    id: str
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
+    sticky: bool
+
+
+class OutputDefinition(BaseModel):
+    id: str
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
+
+
+class ToolInputDefinition(OutputDefinition):
+    tool_id: Annotated[str, Field(alias="toolId")]
+
+
+class ToolOutputDefinition(BaseModel):
+    id: str
+    tool_id: Annotated[str, Field(alias="toolId")]
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
+
+
+class StepDefinition(BaseModel):
+    id: str
+    inputs: dict[str, InputDefinition]
+    output: OutputDefinition | None
+
+
+class ConfigDefinition(BaseModel):
+    id: str
+    value: Any
+
+
+class ToolDefinition(BaseModel):
+    id: str
+    inputs: dict[str, ToolInputDefinition]
+    output: ToolOutputDefinition | None
+    configs: dict[str, ConfigDefinition]
+
+
+class StateDefinition(BaseModel):
+    id: str
+    step_id: Annotated[str, Field(alias="stepId")]
+    input_ids: Annotated[list[str], Field(alias="inputIds")]
+    value: Any
+
+
+class BlockDefinition(BaseModel):
+    id: str
+    type: BlockType
+    configs: dict[str, ConfigDefinition]
+    outputs: dict[str, OutputDefinition]
+    steps: dict[str, StepDefinition]
+    tools: dict[str, ToolDefinition]
+    states: dict[str, StateDefinition]
