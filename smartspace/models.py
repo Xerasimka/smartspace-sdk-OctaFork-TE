@@ -555,8 +555,6 @@ class ToolDefinition(BaseModel):
 
 class StateDefinition(BaseModel):
     id: str
-    step_id: Annotated[str | None, Field(alias="stepId")]
-    input_ids: Annotated[list[str] | None, Field(alias="inputIds")]
     value: Any
 
 
