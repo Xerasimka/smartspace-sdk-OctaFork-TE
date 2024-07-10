@@ -30,6 +30,7 @@ from smartspace.models import (
 
 
 class IBlockProvider(abc.ABC):
+    @abc.abstractmethod
     def get_block_interface(self, block_type: BlockType) -> BlockInterface: ...
 
 
