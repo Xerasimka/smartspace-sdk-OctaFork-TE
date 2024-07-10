@@ -2,7 +2,6 @@ import abc
 import asyncio
 import inspect
 import json
-from dataclasses import dataclass
 from functools import lru_cache
 from typing import (
     Annotated,
@@ -19,7 +18,7 @@ from typing import (
     cast,
 )
 
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 from typing_extensions import get_origin
 
 from smartspace.models import (
@@ -110,60 +109,58 @@ def _get_configs(cls) -> dict[str, "ConfigInterface"]:
     return configs
 
 
-@dataclass
-class InputDefinition:
+class InputDefinition(BaseModel):
     id: str
-    json_schema: dict[str, Any]
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
     sticky: bool
 
 
-@dataclass
-class OutputDefinition:
+class OutputDefinition(BaseModel):
     id: str
-    json_schema: dict[str, Any]
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
 
 
-@dataclass
 class ToolInputDefinition(OutputDefinition):
-    tool_id: str
+    tool_id: Annotated[str, Field(alias="toolId")]
 
 
-@dataclass
-class ToolOutputDefinition:
+class ToolOutputDefinition(BaseModel):
     id: str
-    tool_id: str
-    json_schema: dict[str, Any]
+    tool_id: Annotated[str, Field(alias="toolId")]
+    json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
 
 
-@dataclass
-class StepDefinition:
+class StepDefinition(BaseModel):
     id: str
     inputs: dict[str, InputDefinition]
     output: OutputDefinition | None
 
 
-@dataclass
-class ConfigDefinition:
+class ConfigDefinition(BaseModel):
     id: str
     value: Any
 
 
-@dataclass
-class ToolDefinition:
+class ToolDefinition(BaseModel):
     id: str
     inputs: dict[str, ToolInputDefinition]
     output: ToolOutputDefinition | None
     configs: dict[str, ConfigDefinition]
 
 
-@dataclass
-class BlockDefinition:
+class StateDefinition(BaseModel):
+    id: str
+    step_id: Annotated[str, Field(alias="stepId")]
+
+
+class BlockDefinition(BaseModel):
     id: str
     type: BlockType
     configs: dict[str, ConfigDefinition]
     outputs: dict[str, OutputDefinition]
     steps: dict[str, StepDefinition]
     tools: dict[str, ToolDefinition]
+    states: dict[str, StateDefinition]
 
 
 class ValueSource:
@@ -301,7 +298,6 @@ class Block:
     def __init__(
         self,
         definition: BlockDefinition | None = None,
-        states: dict[str, Any] | None = None,
         flow_context: FlowContext | None = None,
     ):
         if not definition:
@@ -316,9 +312,8 @@ class Block:
         self._steps_instances: dict[str, StepInstance] = {}
         self._tools: dict[str, Tool] = {}
 
-        if states:
-            for state_id, state_value in states.items():
-                setattr(self, state_id, state_value)
+        for state_id, state_value in definition.states.items():
+            setattr(self, state_id, state_value)
 
         for output_name, output_definition in self._definition.outputs.items():
             if type(output_definition) is OutputDefinition:
@@ -378,6 +373,7 @@ class Block:
             outputs={},
             steps={},
             tools={},
+            states={},
         )
 
     def _get_tool_type(self, tool_id: str) -> "type[Tool]":
@@ -635,3 +631,8 @@ def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B,
 class User(Block):
     @step(output_name="response")
     async def ask(self, message: str, schema: str) -> Any: ...
+
+
+class IBlockProvider(abc.ABC):
+    @abc.abstractmethod
+    def get_block_interface(self, block_type: BlockType) -> BlockInterface: ...
