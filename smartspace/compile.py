@@ -46,7 +46,7 @@ def compile_blocks(
 
         blocks[block.id] = BlockDefinition(
             id=block.id,
-            version=block.type.version,
+            type=block.type,
             configs=_get_block_configs(
                 block_interface=block_interface,
                 config_values=block.config,

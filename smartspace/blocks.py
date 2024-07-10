@@ -24,6 +24,7 @@ from typing_extensions import get_origin
 
 from smartspace.models import (
     BlockInterface,
+    BlockType,
     CallbackCall,
     ConfigInterface,
     FlowValue,
@@ -162,7 +163,7 @@ class ToolDefinition:
 @dataclass
 class BlockDefinition:
     id: str
-    version: str
+    type: BlockType
     configs: dict[str, ConfigDefinition]
     outputs: dict[str, OutputDefinition]
     steps: dict[str, StepDefinition]
@@ -366,7 +367,10 @@ class Block:
     def get_default_definition(cls) -> BlockDefinition:
         return BlockDefinition(  # TODO get actual configs, outputs, steps, etc
             id=cls.__name__,
-            version="dev",
+            type=BlockType(
+                name=cls.__name__,
+                version="dev",
+            ),
             configs={},
             outputs={},
             steps={},
