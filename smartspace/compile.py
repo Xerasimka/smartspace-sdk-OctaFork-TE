@@ -1,6 +1,7 @@
 import abc
 from typing import Any, cast
 
+import jsonschema
 from more_itertools import first
 
 from smartspace.blocks import (
@@ -155,10 +156,13 @@ def _get_block_configs(
 ) -> dict[str, ConfigDefinition]:
     configs: dict[str, ConfigDefinition] = {}
 
-    for config_interface in block_interface.configs:
-        configs[config_interface.name] = ConfigDefinition(
-            id=config_interface.name,
-            value=config_values[config_interface.name],
+    for name, config_interface in block_interface.configs.items():
+        value = config_values[name]
+        if validate:
+            jsonschema.validate(value, config_interface.json_schema)
+        configs[name] = ConfigDefinition(
+            id=name,
+            value=config_values[name],
         )
 
     return configs
@@ -170,9 +174,9 @@ def _get_block_outputs(
 ) -> dict[str, OutputDefinition]:
     outputs: dict[str, OutputDefinition] = {}
 
-    for output in block_interface.outputs:
-        outputs[output.name] = OutputDefinition(
-            id=output.name,
+    for name, output in block_interface.outputs.items():
+        outputs[name] = OutputDefinition(
+            id=name,
             json_schema=output.json_schema,
         )
 
@@ -185,10 +189,10 @@ def _get_block_steps(
 ) -> dict[str, StepDefinition]:
     steps: dict[str, StepDefinition] = {}
 
-    for step in block_interface.steps:
+    for name, step in block_interface.steps.items():
         inputs = {
-            step_input.name: InputDefinition(
-                id=step_input.name,
+            name: InputDefinition(
+                id=name,
                 sticky=step_input.sticky,
                 json_schema=step_input.json_schema,
             )
@@ -201,11 +205,11 @@ def _get_block_steps(
             else first(
                 [
                     OutputDefinition(
-                        id=output.name,
+                        id=output_name,
                         json_schema=output.json_schema,
                     )
-                    for output in block_interface.outputs
-                    if output.name == step.output_ref
+                    for output_name, output in block_interface.outputs.items()
+                    if output_name == step.output_ref
                 ],
                 None,
             )
@@ -232,24 +236,24 @@ def _get_block_tools(
 ) -> dict[str, ToolDefinition]:
     tools: dict[str, ToolDefinition] = {}
 
-    for tool in block_interface.tools:
+    for tool_name, tool in block_interface.tools.items():
         if tool.multiple:
-            configs = cast(dict[str, Any], tool_configs.get(tool.name, {}))
+            configs = cast(dict[str, Any], tool_configs.get(tool_name, {}))
 
             for name, tool_config in configs.items():
-                tool_id = f"{tool.name}.{name}"
+                tool_id = f"{tool_name}.{name}"
                 tools[tool_id] = ToolDefinition(
                     id=tool_id,
                     inputs={
-                        tool_input.name: ToolInputDefinition(
-                            id=tool_input.name,
+                        tool_input_name: ToolInputDefinition(
+                            id=tool_input_name,
                             json_schema=tool_input.json_schema,
                             tool_id=tool_id,
                         )
-                        for tool_input in tool.inputs
+                        for tool_input_name, tool_input in tool.inputs.items()
                     },
                     output=ToolOutputDefinition(
-                        id=tool.output.name,
+                        id="return",
                         json_schema=tool.output.json_schema,
                         tool_id=tool_id,
                     )
@@ -258,24 +262,24 @@ def _get_block_tools(
                     configs=tool_config,
                 )
         else:
-            tools[tool.name] = ToolDefinition(
-                id=tool.name,
+            tools[tool_name] = ToolDefinition(
+                id=tool_name,
                 inputs={
-                    tool_input.name: ToolInputDefinition(
-                        id=tool_input.name,
+                    tool_input_name: ToolInputDefinition(
+                        id=tool_input_name,
                         json_schema=tool_input.json_schema,
-                        tool_id=tool.name,
+                        tool_id=tool_name,
                     )
-                    for tool_input in tool.inputs
+                    for tool_input_name, tool_input in tool.inputs.items()
                 },
                 output=ToolOutputDefinition(
-                    id=tool.output.name,
+                    id="return",
                     json_schema=tool.output.json_schema,
-                    tool_id=tool.name,
+                    tool_id=tool_name,
                 )
                 if tool.output
                 else None,
-                configs=tool_configs[tool.name] if tool.name in tool_configs else {},
+                configs=tool_configs[tool_name] if tool_name in tool_configs else {},
             )
 
     return tools

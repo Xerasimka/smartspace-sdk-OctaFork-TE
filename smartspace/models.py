@@ -83,14 +83,7 @@ class IOCInterface(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    name: str
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
-
-    def models(self) -> list[dict[str, Any]]:
-        if "title" in self.json_schema:
-            return [self.json_schema]
-
-        return []
 
 
 class InputInterface(IOCInterface):
@@ -104,15 +97,14 @@ class ConfigInterface(IOCInterface): ...
 
 
 class ToolInterface(BaseModel):
-    name: str
     multiple: bool
-    inputs: Annotated[list[InputInterface], Field(min_length=1)]
+    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
     output: OutputInterface | None = None
-    configs: list[ConfigInterface] = []
+    configs: dict[str, ConfigInterface] = {}
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d = {"name": self.name, "multiple": self.multiple}
+        d: dict[str, Any] = {"multiple": self.multiple}
 
         if len(self.inputs):
             d["inputs"] = self.inputs
@@ -133,9 +125,6 @@ class StepInterface(BaseModel):
     inputs: Annotated[list[InputInterface], Field(min_length=1)]
     output_ref: Annotated[str | None, Field(None, alias="outputRef")]
 
-    def models(self) -> list[dict[str, Any]]:
-        return [model for i in self.inputs for model in i.models()]
-
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
         d = {"name": self.name, "inputs": self.inputs}
@@ -146,13 +135,22 @@ class StepInterface(BaseModel):
         return d
 
 
+class StateInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    step_id: Annotated[str | None, Field(alias="stepId")]
+    input_ids: Annotated[list[str] | None, Field(alias="inputIds")]
+    default_value_json: Annotated[str, Field(alias="defaultValueJson")]
+
+
 class BlockInterface(BaseModel):
     name: str
     version: str = "unknown"
-    steps: list[StepInterface]
-    outputs: list[OutputInterface] = []
-    configs: list[ConfigInterface] = []
-    tools: list[ToolInterface] = []
+    steps: dict[str, StepInterface]
+    outputs: dict[str, OutputInterface] = {}
+    configs: dict[str, ConfigInterface] = {}
+    tools: dict[str, ToolInterface] = {}
+    states: dict[str, StateInterface] = {}
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
@@ -172,29 +170,6 @@ class BlockInterface(BaseModel):
             d["configs"] = self.configs
 
         return d
-
-    def models(self) -> list[dict[str, Any]]:
-        models_list = [
-            model
-            for model_group in [output.models() for output in self.outputs]
-            + [step.models() for step in self.steps]
-            for model in model_group
-        ]
-
-        models_dict: dict[str, dict[str, Any]] = {}
-        for model in models_list:
-            if "title" not in model:
-                raise ValueError("Model schema has no title")
-
-            model_name = model["title"]
-            if model_name not in models_dict:
-                models_dict[model_name] = model
-            elif model != models_dict[model_name]:
-                raise ValueError(
-                    f"Found 2 different model schemas for model {model_name}"
-                )
-
-        return list(models_dict.values())
 
 
 class FlowIODefinition(BaseModel):
