@@ -69,6 +69,8 @@ class ToolOutputReference(ToolReference):
 
 
 class BlockType(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     version: str
 
@@ -97,6 +99,8 @@ class ConfigInterface(IOCInterface): ...
 
 
 class ToolInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     multiple: bool
     inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
     output: OutputInterface | None = None
@@ -144,6 +148,8 @@ class StateInterface(BaseModel):
 
 
 class BlockInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     version: str = "unknown"
     steps: dict[str, StepInterface]
@@ -252,11 +258,15 @@ class ValueTargetRef(BaseModel):
 
 
 class ConnectionDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     source: ValueSourceRef
     target: ValueTargetRef
 
 
 class FlowDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     class Block(BaseModel):
         id: str
         type: BlockType
@@ -420,6 +430,8 @@ class FlowValue(FlowValueVersion):
 
 
 class CallbackCall(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     callback_name: str
     direct_params: dict[str, Any]
     tool_result_param: str
@@ -436,6 +448,8 @@ class StepInputValue(BaseModel):
 
 
 class BlockState(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: UUID
     name: str
     step_id: str | None = None
@@ -464,21 +478,29 @@ class FlowInputInterceptionModel(BaseModel):
 
 
 class ThreadMessageResponseSource(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     index: int
     uri: str
 
 
 class ThreadMessageResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     content: str
     sources: list[ThreadMessageResponseSource] | None = None
 
 
 class File(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str | None = None
     uri: str
 
 
 class ContentItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     image: File | None = None
     text: str | None = None
 
@@ -495,6 +517,8 @@ class ThreadMessage(BaseModel):
 
 
 class SmartSpaceDataSpace(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     name: str
 
@@ -515,38 +539,52 @@ class SmartSpaceWorkspace(BaseModel):
 
 
 class InputDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
     sticky: bool
 
 
 class OutputDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
 
 
 class ToolInputDefinition(OutputDefinition):
+    model_config = ConfigDict(populate_by_name=True)
+
     tool_id: Annotated[str, Field(alias="toolId")]
 
 
 class ToolOutputDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     tool_id: Annotated[str, Field(alias="toolId")]
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
 
 
 class StepDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     inputs: dict[str, InputDefinition]
     output: OutputDefinition | None
 
 
 class ConfigDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     value: Any
 
 
 class ToolDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     inputs: dict[str, ToolInputDefinition]
     output: ToolOutputDefinition | None
@@ -554,11 +592,15 @@ class ToolDefinition(BaseModel):
 
 
 class StateDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     value: Any
 
 
 class BlockDefinition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     type: BlockType
     configs: dict[str, ConfigDefinition]
