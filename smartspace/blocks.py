@@ -258,10 +258,21 @@ class Block:
         if not definition:
             definition = self.get_default_definition()
 
+        if not flow_context:
+            flow_context = FlowContext(
+                workspace=SmartSpaceWorkspace(
+                    id="test",
+                    name="test",
+                    data_spaces=[],
+                    flow_definition=None,
+                ),
+                message_history=[],
+            )
+
         self.id = definition.id
         self._definition = definition
-        self.workspace = flow_context.workspace if flow_context else None
-        self.message_history = flow_context.message_history if flow_context else None
+        self.workspace = flow_context.workspace
+        self.message_history = flow_context.message_history
 
         self._outputs: dict[str, Output | ToolInput] = {}
         self._steps_instances: dict[str, StepInstance] = {}
