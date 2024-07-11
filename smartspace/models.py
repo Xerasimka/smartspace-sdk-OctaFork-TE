@@ -13,8 +13,6 @@ from pydantic import (
     model_serializer,
 )
 
-value_type = int | float | str | dict[str, Any] | list[Any] | BaseModel
-
 
 def _nullable_schema_override(
     self, schema: Any
@@ -435,46 +433,6 @@ class CallbackCall(BaseModel):
     callback_name: str
     direct_params: dict[str, Any]
     tool_result_param: str
-
-
-class StepInputValue(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: UUID
-    value: FlowValue
-    flow_path: Annotated[list[str], Field(alias="flowPath")]
-    input_ref: Annotated[StepInputReference, Field(alias="inputRef")]
-    sticky: bool
-
-
-class BlockState(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: UUID
-    name: str
-    step_id: str | None = None
-    inputs: "list[StepInputValue] | None" = None
-    data: Any
-
-
-class FlowOutputValue(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    value: FlowValue
-    output_ref: Annotated[FlowOutputReference, Field(alias="outputRef")]
-
-
-class FlowInputInterceptionModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    id: UUID
-    flow_path: Annotated[list[str], Field(alias="flowPath")]
-    block_id: Annotated[str, Field(alias="blockId")]
-    step_execution_id: Annotated[UUID, Field(alias="stepExecutionId")]
-    input_id: Annotated[str, Field(alias="inputId")]
-    source_value_ids: Annotated[list[UUID], Field(alias="sourceValueIds")]
-    processed_at: datetime | None
-    created_at: datetime
 
 
 class ThreadMessageResponseSource(BaseModel):
