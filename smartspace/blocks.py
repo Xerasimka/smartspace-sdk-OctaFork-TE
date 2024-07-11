@@ -612,14 +612,14 @@ def step(
     return step_decorator
 
 
-def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B, P]]:
+def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B, P, T]]:
     def callback_decorator(
         fn: Callable[Concatenate[B, P], Awaitable[T]],
-    ) -> Callback[B, P]:
+    ) -> Callback[B, P, T]:
         if not inspect.iscoroutinefunction(fn):
             raise TypeError(f"Steps must be async and step {fn.__name__} is not")
 
-        return Callback[B, P](fn)
+        return Callback[B, P, T](fn)
 
     return callback_decorator
 
