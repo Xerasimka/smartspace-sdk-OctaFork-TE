@@ -242,8 +242,8 @@ class ToolInput(Output):
 class FlowContext:
     def __init__(
         self,
-        workspace: SmartSpaceWorkspace | None,
-        message_history: list[ThreadMessage] | None,
+        workspace: SmartSpaceWorkspace,
+        message_history: list[ThreadMessage],
     ):
         self.workspace = workspace
         self.message_history = message_history
