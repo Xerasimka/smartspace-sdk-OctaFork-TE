@@ -553,7 +553,7 @@ class Step(Generic[B, P, T]):
     ):
         self.name = fn.__name__
         self._fn = fn
-        self._output_name = output_name or self.name
+        self._output_name = f"{self.name}.{output_name or 'output'}"
 
         class as_tool(Tool):
             def run(self): ...
