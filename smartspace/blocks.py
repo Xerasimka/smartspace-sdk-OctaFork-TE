@@ -24,6 +24,7 @@ from typing_extensions import get_origin
 from smartspace.models import (
     BlockDefinition,
     BlockInterface,
+    BlockOutputReference,
     BlockType,
     CallbackCall,
     ConfigDefinition,
@@ -40,8 +41,11 @@ from smartspace.models import (
     ThreadMessage,
     ToolDefinition,
     ToolInputDefinition,
+    ToolInputReference,
     ToolInterface,
     ToolOutputDefinition,
+    ValueSourceRef,
+    ValueSourceType,
 )
 from smartspace.utils import my_issubclass
 
@@ -119,14 +123,11 @@ def _get_configs(cls) -> dict[str, "ConfigInterface"]:
 
 
 class ValueSource:
-    def __init__(self):
-        self.value_callback: Callable[[Any], FlowValue] | None = None
+    def __init__(self, value_callback: Callable[[Any], FlowValue]):
+        self.value_callback = value_callback
 
     def emit(self, value: Any) -> FlowValue:
-        if self.value_callback:
-            return self.value_callback(value)
-
-        raise Exception("ValueSource must have value_callback set before emitting")
+        return self.value_callback(value)
 
 
 class ConfigValue(
@@ -197,8 +198,9 @@ class Output(Generic[T], ValueSource):
     def __init__(
         self,
         definition: OutputDefinition,
+        value_callback: Callable[[Any], FlowValue],
     ):
-        ValueSource.__init__(self)
+        ValueSource.__init__(self, value_callback=value_callback)
         self.id = definition.id
         self.schema = definition.json_schema
 
@@ -234,8 +236,12 @@ class ToolOutput(Generic[T]):
 
 
 class ToolInput(Output):
-    def __init__(self, definition: ToolInputDefinition):
-        super().__init__(definition)
+    def __init__(
+        self,
+        definition: ToolInputDefinition,
+        value_callback: Callable[[Any], FlowValue],
+    ):
+        super().__init__(definition, value_callback=value_callback)
         self.tool_id = definition.tool_id
 
 
@@ -252,9 +258,14 @@ class FlowContext:
 class Block:
     def __init__(
         self,
+        register_tool_callback: Callable[[str, list[FlowValue], CallbackCall], None],
+        emit_output_value: Callable[[Any, ValueSourceRef], FlowValue],
         definition: BlockDefinition | None = None,
         flow_context: FlowContext | None = None,
     ):
+        self.add_tool_callback = register_tool_callback
+        self.emit_output_value = emit_output_value
+
         if not definition:
             definition = self.get_default_definition()
 
@@ -284,7 +295,16 @@ class Block:
 
         for output_name, output_definition in self._definition.outputs.items():
             if type(output_definition) is OutputDefinition:
-                self._outputs[output_name] = Output(output_definition)
+                source_ref = ValueSourceRef(
+                    type=ValueSourceType.BLOCK_OUTPUT,
+                    block_output=BlockOutputReference(
+                        block_id=self.id,
+                        output_id=output_definition.id,
+                    ),
+                )
+                self._outputs[output_name] = Output(
+                    output_definition, lambda v: self.emit_output_value(v, source_ref)
+                )
                 setattr(self, output_name, self._outputs[output_name])
 
         for step_name, step_definition in self._definition.steps.items():
@@ -315,11 +335,28 @@ class Block:
 
         for tool_name, tool_definition in self._definition.tools.items():
             inputs = {
-                name: ToolInput(input_definition)
+                name: ToolInput(
+                    input_definition,
+                    value_callback=lambda v: self.emit_output_value(
+                        v,
+                        ValueSourceRef(
+                            type=ValueSourceType.TOOL_INPUT,
+                            tool_input=ToolInputReference(
+                                block_id=self.id,
+                                tool_id=tool_name,
+                                input_id=name,
+                            ),
+                        ),
+                    ),
+                )
                 for name, input_definition in tool_definition.inputs.items()
             }
             tool_type = self._get_tool_type(tool_name)
-            self._tools[tool_name] = tool_type(tool_definition, inputs)
+            self._tools[tool_name] = tool_type(
+                tool_definition,
+                inputs,
+                register_tool_callback,
+            )
 
             for tool_input in inputs.values():
                 self._outputs[f"{tool_name}.{tool_input.id}"] = tool_input
@@ -451,20 +488,26 @@ class Tool(abc.ABC, Generic[P, T]):
             self,
             callback: Callable[[R], CallbackCall],
         ) -> "Tool.ToolCall[R]":
-            self.parent._add_callback(self.values, callback(cast(R, DummyToolValue())))
+            self.parent.register_callback(
+                self.parent.id, self.values, callback(cast(R, DummyToolValue()))
+            )
 
             return self
 
-    def __init__(self, definition: ToolDefinition, inputs: dict[str, ToolInput]):
+    def __init__(
+        self,
+        definition: ToolDefinition,
+        inputs: dict[str, ToolInput],
+        register_callback: Callable[[str, list[FlowValue], CallbackCall], None],
+    ):
         # tools are triggered by sending values to the outputs and then waiting for a response on the input
         self.id = definition.id
         self.output = ToolOutput[T](definition.output) if definition.output else None
         self.inputs = inputs
+        self.register_callback = register_callback
 
         for config_name, config_definition in definition.configs.items():
             setattr(self, config_name, config_definition.value)
-
-        self._add_callback: Callable[[list[FlowValue], CallbackCall], None] = None  # type: ignore
 
     def get_input_schema(self):
         """
