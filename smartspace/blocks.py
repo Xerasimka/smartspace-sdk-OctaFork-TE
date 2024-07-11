@@ -400,6 +400,13 @@ class Block:
 
                 steps[attribute_name] = attribute.interface()
 
+            if type(attribute) is Callback:
+                step_output = attribute.output_interface()
+                if step_output:
+                    outputs[attribute._output_name] = step_output
+
+                steps[attribute_name] = attribute.interface()
+
         block_interface = BlockInterface(
             name=cls.__name__,
             version=version,
@@ -563,7 +570,7 @@ class Step(Generic[B, P, T]):
         )
 
 
-class Callback(Generic[B, P]):
+class Callback(Step[B, P, T]):
     def __init__(
         self,
         fn: Callable[Concatenate[B, P], Awaitable[T]],
