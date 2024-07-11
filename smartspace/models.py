@@ -123,13 +123,12 @@ class ToolInterface(BaseModel):
 class StepInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    name: str
     inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
     output_ref: Annotated[str | None, Field(None, alias="outputRef")]
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d = {"name": self.name, "inputs": self.inputs}
+        d: dict[str, Any] = {"inputs": self.inputs}
 
         if self.output_ref:
             d["outputRef"] = self.output_ref
