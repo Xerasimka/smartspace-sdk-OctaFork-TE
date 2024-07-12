@@ -346,7 +346,9 @@ class Block:
             field_type = self.__class__.__annotations__[config_name]
             config_type = field_type.__args__[0]
 
-            if my_issubclass(config_type, BaseModel):
+            if my_issubclass(config_type, BaseModel) and isinstance(
+                config_definition.value, dict
+            ):
                 config_type = cast(type[BaseModel], config_type)
                 setattr(
                     self,
@@ -590,13 +592,13 @@ class StepInstance(Generic[B, P, T]):
         for input_name, value in kwargs.items():
             input_type = input_types[input_name]
             o = get_origin(input_type)
-            if my_issubclass(input_type, BaseModel):
+            if my_issubclass(input_type, BaseModel) and isinstance(value, dict):
                 input_type = cast(type[BaseModel], input_type)
                 step_kwargs[input_name] = input_type.model_validate(value)
             elif o is list:
                 value = cast(list[Any], value)
                 item_type: type = input_type.__args__[0]
-                if my_issubclass(item_type, BaseModel):
+                if my_issubclass(item_type, BaseModel) and isinstance(value, dict):
                     step_kwargs[input_name] = [item_type.validate(v) for v in value]
                 else:
                     step_kwargs[input_name] = value
