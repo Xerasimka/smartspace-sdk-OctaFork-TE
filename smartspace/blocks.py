@@ -27,6 +27,7 @@ from smartspace.models import (
     BlockOutputReference,
     BlockType,
     CallbackCall,
+    CallbackInterface,
     ConfigDefinition,
     ConfigInterface,
     FlowValue,
@@ -427,6 +428,7 @@ class Block:
     def interface(cls, version: str = "unknown") -> BlockInterface:
         outputs: dict[str, OutputInterface] = {}
         steps: dict[str, StepInterface] = {}
+        callbacks: dict[str, CallbackInterface] = {}
         tools: dict[str, ToolInterface] = {}
         states: dict[str, StateInterface] = {}
         configs = _get_configs(cls)
@@ -472,17 +474,14 @@ class Block:
                 steps[attribute_name] = attribute.interface()
 
             if type(attribute) is Callback:
-                step_output = attribute.output_interface()
-                if step_output:
-                    outputs[attribute._output_name] = step_output
-
-                steps[attribute_name] = attribute.interface()
+                callbacks[attribute_name] = attribute.interface()
 
         block_interface = BlockInterface(
             name=cls.__name__,
             version=version,
             outputs=outputs,
             steps=steps,
+            callbacks=callbacks,
             tools=tools,
             configs=configs,
             states=states,
@@ -651,13 +650,21 @@ class Step(Generic[B, P, T]):
         )
 
 
-class Callback(Step[B, P, T]):
+class Callback(Generic[B, P]):
     def __init__(
         self,
-        fn: Callable[Concatenate[B, P], Awaitable[T]],
+        fn: Callable[Concatenate[B, P], Awaitable],
     ):
         self.name = fn.__name__
         self._fn = fn
+
+    def interface(self) -> CallbackInterface:
+        return CallbackInterface(
+            inputs=_get_input_interfaces(self._fn),
+        )
+
+    def input_types(self) -> dict[str, Type]:
+        return _get_parameter_names_and_types(self._fn)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> CallbackCall:
         values = inspect.getcallargs(self._fn, cast(Block, None), *args, **kwargs)
@@ -690,14 +697,14 @@ def step(
     return step_decorator
 
 
-def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B, P, T]]:
+def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B, P]]:
     def callback_decorator(
         fn: Callable[Concatenate[B, P], Awaitable[T]],
-    ) -> Callback[B, P, T]:
+    ) -> Callback[B, P]:
         if not inspect.iscoroutinefunction(fn):
             raise TypeError(f"Steps must be async and step {fn.__name__} is not")
 
-        return Callback[B, P, T](fn)
+        return Callback[B, P](fn)
 
     return callback_decorator
 

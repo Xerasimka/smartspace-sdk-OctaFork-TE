@@ -136,6 +136,12 @@ class StepInterface(BaseModel):
         return d
 
 
+class CallbackInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
+
+
 class StateInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -150,6 +156,7 @@ class BlockInterface(BaseModel):
     name: str
     version: str = "unknown"
     steps: dict[str, StepInterface]
+    callbacks: dict[str, CallbackInterface] = {}
     outputs: dict[str, OutputInterface] = {}
     configs: dict[str, ConfigInterface] = {}
     tools: dict[str, ToolInterface] = {}
@@ -159,9 +166,11 @@ class BlockInterface(BaseModel):
     def _serialize(self) -> dict[str, Any]:
         d = {
             "name": self.name,
-            "steps": self.steps,
             "version": self.version,
+            "steps": self.steps,
         }
+        if len(self.callbacks):
+            d["callbacks"] = self.callbacks
 
         if len(self.outputs):
             d["outputs"] = self.outputs
