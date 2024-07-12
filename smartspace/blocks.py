@@ -9,7 +9,6 @@ from typing import (
     Awaitable,
     Callable,
     Concatenate,
-    Generator,
     Generic,
     ParamSpec,
     Tuple,
@@ -477,12 +476,13 @@ class Tool(abc.ABC, Generic[P, T]):
             self.parent = parent
             self.values = values
 
-        def __await__(self) -> Generator[Any, None, R]:
-            if not self.parent.output:
-                return None  # type: ignore
+        # this provides the ability to await tool calls and get the result, but this is not supported atm because of the complexity of local dev and also because it's not best practice
+        # def __await__(self) -> Generator[Any, None, R]:
+        #     if not self.parent.output:
+        #         return None  # type: ignore
 
-            v = yield from self.parent.output.wait(self.values).__await__()
-            return v  # type: ignore
+        #     v = yield from self.parent.output.wait(self.values).__await__()
+        #     return v  # type: ignore
 
         def then(
             self,
