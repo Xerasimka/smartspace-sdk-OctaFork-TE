@@ -512,10 +512,12 @@ class Tool(abc.ABC, Generic[P, T]):
             self,
             callback: Callable[[R], CallbackCall],
         ) -> "Tool.ToolCall[R]":
+            callback_call = callback(cast(R, DummyToolValue()))
+
             self.parent.register_callback(
                 tool_id=self.parent.id,
                 tool_call_values=self.values,
-                callback=callback(cast(R, DummyToolValue())),
+                callback=callback_call,
             )
 
             return self
@@ -658,18 +660,15 @@ class Callback(Step[B, P, T]):
         self._fn = fn
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> CallbackCall:
-        # get positional arguments and put them into kwargs
-        for i, name in enumerate(self._fn.__annotations__.keys()):
-            if i < len(args):
-                kwargs[name] = args[i]
+        values = inspect.getcallargs(self._fn, cast(Block, None), *args, **kwargs)
 
         tool_result_param = ""
         direct_params: dict[str, Any] = {}
 
-        for arg_name, value in kwargs.items():
+        for arg_name, value in values.items():
             if isinstance(value, DummyToolValue):
                 tool_result_param = arg_name
-            else:
+            elif arg_name != "self":
                 direct_params[arg_name] = value
 
         return CallbackCall(
