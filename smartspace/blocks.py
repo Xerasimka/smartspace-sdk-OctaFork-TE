@@ -2,7 +2,7 @@ import abc
 import asyncio
 import inspect
 import json
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import (
     Annotated,
     Any,
@@ -11,6 +11,7 @@ from typing import (
     Concatenate,
     Generic,
     ParamSpec,
+    Protocol,
     Tuple,
     Type,
     TypeVar,
@@ -254,11 +255,28 @@ class FlowContext:
         self.message_history = message_history
 
 
+class RegisterToolCallbackFunction(Protocol):
+    def __call__(
+        self,
+        tool_id: str,
+        tool_call_values: list[FlowValue],
+        callback: CallbackCall,
+    ): ...
+
+
+class EmitOutputValueFunction(Protocol):
+    def __call__(
+        self,
+        value: Any,
+        source: ValueSourceRef,
+    ) -> FlowValue: ...
+
+
 class Block:
     def __init__(
         self,
-        register_tool_callback: Callable[[str, list[FlowValue], CallbackCall], None],
-        emit_output_value: Callable[[Any, ValueSourceRef], FlowValue],
+        register_tool_callback: RegisterToolCallbackFunction,
+        emit_output_value: EmitOutputValueFunction,
         definition: BlockDefinition | None = None,
         flow_context: FlowContext | None = None,
     ):
@@ -294,16 +312,17 @@ class Block:
 
         for output_name, output_definition in self._definition.outputs.items():
             if type(output_definition) is OutputDefinition:
-                source_ref = ValueSourceRef(
-                    type=ValueSourceType.BLOCK_OUTPUT,
-                    block_output=BlockOutputReference(
-                        block_id=self.id,
-                        output_id=output_definition.id,
+                cb = partial(
+                    self.emit_output_value,
+                    source=ValueSourceRef(
+                        type=ValueSourceType.BLOCK_OUTPUT,
+                        block_output=BlockOutputReference(
+                            block_id=self.id,
+                            output_id=output_definition.id,
+                        ),
                     ),
                 )
-                self._outputs[output_name] = Output(
-                    output_definition, lambda v: self.emit_output_value(v, source_ref)
-                )
+                self._outputs[output_name] = Output(output_definition, cb)
                 setattr(self, output_name, self._outputs[output_name])
 
         for step_name, step_definition in self._definition.steps.items():
@@ -336,9 +355,9 @@ class Block:
             inputs = {
                 name: ToolInput(
                     input_definition,
-                    value_callback=lambda v: self.emit_output_value(
-                        v,
-                        ValueSourceRef(
+                    value_callback=partial(
+                        self.emit_output_value,
+                        source=ValueSourceRef(
                             type=ValueSourceType.TOOL_INPUT,
                             tool_input=ToolInputReference(
                                 block_id=self.id,
@@ -489,7 +508,9 @@ class Tool(abc.ABC, Generic[P, T]):
             callback: Callable[[R], CallbackCall],
         ) -> "Tool.ToolCall[R]":
             self.parent.register_callback(
-                self.parent.id, self.values, callback(cast(R, DummyToolValue()))
+                tool_id=self.parent.id,
+                tool_call_values=self.values,
+                callback=callback(cast(R, DummyToolValue())),
             )
 
             return self
@@ -498,7 +519,7 @@ class Tool(abc.ABC, Generic[P, T]):
         self,
         definition: ToolDefinition,
         inputs: dict[str, ToolInput],
-        register_callback: Callable[[str, list[FlowValue], CallbackCall], None],
+        register_callback: RegisterToolCallbackFunction,
     ):
         # tools are triggered by sending values to the outputs and then waiting for a response on the input
         self.id = definition.id
