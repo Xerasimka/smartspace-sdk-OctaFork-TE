@@ -83,7 +83,9 @@ def _get_return_type(callable: Callable):
 def _get_input_interfaces(callable: Callable) -> dict[str, "InputInterface"]:
     return {
         name: InputInterface(
-            json_schema=TypeAdapter(annotation).json_schema(),
+            json_schema=TypeAdapter(annotation).json_schema()
+            if annotation is not inspect.Parameter.empty
+            else {},
             sticky=any(
                 [
                     metadata.sticky
@@ -100,7 +102,9 @@ def _get_output_interface(callable: Callable) -> "OutputInterface | None":
     return_type = _get_return_type(callable)
     if return_type:
         return OutputInterface(
-            json_schema=TypeAdapter(return_type).json_schema(),
+            json_schema=TypeAdapter(return_type).json_schema()
+            if return_type is not inspect.Parameter.empty
+            else {},
         )
     else:
         return None
@@ -116,7 +120,9 @@ def _get_configs(cls) -> dict[str, "ConfigInterface"]:
 
                 config_type = field_type.__args__[0]
                 configs[field_name] = ConfigInterface(
-                    json_schema=TypeAdapter(config_type).json_schema(),
+                    json_schema=TypeAdapter(config_type).json_schema()
+                    if config_type is not inspect.Parameter.empty
+                    else {},
                 )
 
     return configs
@@ -434,6 +440,8 @@ class Block:
                 output_type = field_type.__args__[0]
                 outputs[field_name] = OutputInterface(
                     json_schema=TypeAdapter(output_type).json_schema()
+                    if output_type is not inspect.Parameter.empty
+                    else {}
                 )
             elif _issubclass(field_type, Tool):
                 tool_interface = cast(Tool, field_type).interface(False)
@@ -454,9 +462,6 @@ class Block:
                         break
 
         for attribute_name in dir(cls):
-            if attribute_name.startswith("_"):
-                continue
-
             attribute = getattr(cls, attribute_name)
 
             if type(attribute) is Step:
