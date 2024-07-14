@@ -160,12 +160,10 @@ class InputConfig(BaseModel):
 class State:
     def __init__(
         self,
-        name: str,
         step_id: str | None = None,
         input_ids: list[str] | None = None,
         default_value: Any | None = None,
     ):
-        self.name = name
         self.step_id = step_id
         self.input_ids = input_ids
         self.default_value_class = default_value.__class__
@@ -187,9 +185,9 @@ class State:
             )
         )
 
-    def interface(self) -> StateInterface:
+    def interface(self, name: str) -> StateInterface:
         return StateInterface(
-            name=self.name,
+            name=name,
             step_id=self.step_id,
             input_ids=self.input_ids,
             default_value_json=self.default_value_json,
@@ -473,7 +471,7 @@ class Block:
             else:
                 for metadata in getattr(field_type, "__metadata__", []):
                     if type(metadata) is State:
-                        states.append(metadata.interface())
+                        states.append(metadata.interface(field_name))
                         break
 
         for attribute_name in dir(cls):
