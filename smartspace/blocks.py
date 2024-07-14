@@ -81,9 +81,10 @@ def _get_return_type(callable: Callable):
     )
 
 
-def _get_input_interfaces(callable: Callable) -> dict[str, "InputInterface"]:
-    return {
-        name: InputInterface(
+def _get_input_interfaces(callable: Callable) -> list["InputInterface"]:
+    return [
+        InputInterface(
+            name=name,
             json_schema=TypeAdapter(annotation).json_schema()
             if annotation is not inspect.Parameter.empty
             else {},
@@ -96,13 +97,14 @@ def _get_input_interfaces(callable: Callable) -> dict[str, "InputInterface"]:
             ),
         )
         for name, annotation in _get_parameter_names_and_types(callable).items()
-    }
+    ]
 
 
-def _get_output_interface(callable: Callable) -> "OutputInterface | None":
+def _get_output_interface(name: str, callable: Callable) -> "OutputInterface | None":
     return_type = _get_return_type(callable)
     if return_type:
         return OutputInterface(
+            name=name,
             json_schema=TypeAdapter(return_type).json_schema()
             if return_type is not inspect.Parameter.empty
             else {},
@@ -111,8 +113,8 @@ def _get_output_interface(callable: Callable) -> "OutputInterface | None":
         return None
 
 
-def _get_configs(cls) -> dict[str, "ConfigInterface"]:
-    configs: dict[str, ConfigInterface] = {}
+def _get_configs(cls) -> list["ConfigInterface"]:
+    configs: list[ConfigInterface] = []
     for field_name, field_type in cls.__annotations__.items():
         for m in getattr(field_type, "__metadata__", []):
             if m is ConfigValue:
@@ -120,10 +122,13 @@ def _get_configs(cls) -> dict[str, "ConfigInterface"]:
                     raise Exception("Outputs must have exactly one type.")
 
                 config_type = field_type.__args__[0]
-                configs[field_name] = ConfigInterface(
-                    json_schema=TypeAdapter(config_type).json_schema()
-                    if config_type is not inspect.Parameter.empty
-                    else {},
+                configs.append(
+                    ConfigInterface(
+                        name=field_name,
+                        json_schema=TypeAdapter(config_type).json_schema()
+                        if config_type is not inspect.Parameter.empty
+                        else {},
+                    )
                 )
 
     return configs
@@ -155,10 +160,12 @@ class InputConfig(BaseModel):
 class State:
     def __init__(
         self,
+        name: str,
         step_id: str | None = None,
         input_ids: list[str] | None = None,
         default_value: Any | None = None,
     ):
+        self.name = name
         self.step_id = step_id
         self.input_ids = input_ids
         self.default_value_class = default_value.__class__
@@ -182,6 +189,7 @@ class State:
 
     def interface(self) -> StateInterface:
         return StateInterface(
+            name=self.name,
             step_id=self.step_id,
             input_ids=self.input_ids,
             default_value_json=self.default_value_json,
@@ -428,11 +436,11 @@ class Block:
 
     @classmethod
     def interface(cls, version: str = "unknown") -> BlockInterface:
-        outputs: dict[str, OutputInterface] = {}
-        steps: dict[str, StepInterface] = {}
-        callbacks: dict[str, CallbackInterface] = {}
-        tools: dict[str, ToolInterface] = {}
-        states: dict[str, StateInterface] = {}
+        outputs: list[OutputInterface] = []
+        steps: list[StepInterface] = []
+        callbacks: list[CallbackInterface] = []
+        tools: list[ToolInterface] = []
+        states: list[StateInterface] = []
         configs = _get_configs(cls)
 
         for field_name, field_type in cls.__annotations__.items():
@@ -442,14 +450,17 @@ class Block:
                     raise Exception("Outputs must have exactly one type.")
 
                 output_type = field_type.__args__[0]
-                outputs[field_name] = OutputInterface(
-                    json_schema=TypeAdapter(output_type).json_schema()
-                    if output_type is not inspect.Parameter.empty
-                    else {}
+                outputs.append(
+                    OutputInterface(
+                        name=field_name,
+                        json_schema=TypeAdapter(output_type).json_schema()
+                        if output_type is not inspect.Parameter.empty
+                        else {},
+                    )
                 )
             elif _issubclass(field_type, Tool):
-                tool_interface = cast(Tool, field_type).interface(False)
-                tools[field_name] = tool_interface
+                tool_interface = cast(Tool, field_type).interface(field_name, False)
+                tools.append(tool_interface)
             elif o is dict:
                 assert (
                     field_type.__args__[0] is str
@@ -457,12 +468,12 @@ class Block:
 
                 item_type: type = field_type.__args__[1]
                 if _issubclass(item_type, Tool):
-                    tool_interface = cast(Tool, item_type).interface(True)
-                    tools[field_name] = tool_interface
+                    tool_interface = cast(Tool, item_type).interface(field_name, True)
+                    tools.append(tool_interface)
             else:
                 for metadata in getattr(field_type, "__metadata__", []):
                     if type(metadata) is State:
-                        states[field_name] = metadata.interface()
+                        states.append(metadata.interface())
                         break
 
         for attribute_name in dir(cls):
@@ -471,12 +482,12 @@ class Block:
             if type(attribute) is Step:
                 step_output = attribute.output_interface()
                 if step_output:
-                    outputs[attribute._output_name] = step_output
+                    outputs.append(step_output)
 
-                steps[attribute_name] = attribute.interface()
+                steps.append(attribute.interface())
 
             if type(attribute) is Callback:
-                callbacks[attribute_name] = attribute.interface()
+                callbacks.append(attribute.interface())
 
         block_interface = BlockInterface(
             name=cls.__name__,
@@ -550,11 +561,12 @@ class Tool(abc.ABC, Generic[P, T]):
         return schema
 
     @classmethod
-    def interface(cls, multiple: bool) -> ToolInterface:
+    def interface(cls, name: str, multiple: bool) -> ToolInterface:
         return ToolInterface(
+            name=name,
             multiple=multiple,
             inputs=_get_input_interfaces(cls.run),
-            output=_get_output_interface(cls.run),
+            output=_get_output_interface("return", cls.run),
             configs=_get_configs(cls),
         )
 
@@ -634,11 +646,12 @@ class Step(Generic[B, P, T]):
         self.as_tool = as_tool
 
     def output_interface(self) -> OutputInterface | None:
-        return _get_output_interface(self._fn)
+        return _get_output_interface(self._output_name, self._fn)
 
     def interface(self) -> StepInterface:
         output_interface = self.output_interface()
         return StepInterface(
+            name=self.name,
             inputs=_get_input_interfaces(self._fn),
             output_ref=self._output_name if output_interface else None,
         )
@@ -662,6 +675,7 @@ class Callback(Generic[B, P]):
 
     def interface(self) -> CallbackInterface:
         return CallbackInterface(
+            name=self.name,
             inputs=_get_input_interfaces(self._fn),
         )
 

@@ -81,6 +81,7 @@ class IOCInterface(BaseModel):
     Base model for Inputs, Outputs, and Configs
     """
 
+    name: str
     model_config = ConfigDict(populate_by_name=True)
 
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
@@ -99,14 +100,15 @@ class ConfigInterface(IOCInterface): ...
 class ToolInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    name: str
     multiple: bool
-    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
+    inputs: Annotated[list[InputInterface], Field(min_length=1)]
     output: OutputInterface | None = None
-    configs: dict[str, ConfigInterface] = {}
+    configs: list[ConfigInterface] = []
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"multiple": self.multiple}
+        d: dict[str, Any] = {"name": self.name, "multiple": self.multiple}
 
         if len(self.inputs):
             d["inputs"] = self.inputs
@@ -123,12 +125,13 @@ class ToolInterface(BaseModel):
 class StepInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
+    name: str
+    inputs: Annotated[list[InputInterface], Field(min_length=1)]
     output_ref: Annotated[str | None, Field(None, alias="outputRef")]
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"inputs": self.inputs}
+        d: dict[str, Any] = {"name": self.name, "inputs": self.inputs}
 
         if self.output_ref:
             d["outputRef"] = self.output_ref
@@ -139,12 +142,14 @@ class StepInterface(BaseModel):
 class CallbackInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    inputs: Annotated[dict[str, InputInterface], Field(min_length=1)]
+    name: str
+    inputs: Annotated[list[InputInterface], Field(min_length=1)]
 
 
 class StateInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    name: str
     step_id: Annotated[str | None, Field(alias="stepId")]
     input_ids: Annotated[list[str] | None, Field(alias="inputIds")]
     default_value_json: Annotated[str, Field(alias="defaultValueJson")]
@@ -155,12 +160,12 @@ class BlockInterface(BaseModel):
 
     name: str
     version: str = "unknown"
-    steps: dict[str, StepInterface]
-    callbacks: dict[str, CallbackInterface] = {}
-    outputs: dict[str, OutputInterface] = {}
-    configs: dict[str, ConfigInterface] = {}
-    tools: dict[str, ToolInterface] = {}
-    states: dict[str, StateInterface] = {}
+    steps: list[StepInterface]
+    callbacks: list[CallbackInterface] = []
+    outputs: list[OutputInterface] = []
+    configs: list[ConfigInterface] = []
+    tools: list[ToolInterface] = []
+    states: list[StateInterface] = []
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
