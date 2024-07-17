@@ -104,7 +104,7 @@ class ToolInterface(BaseModel):
     multiple: bool
     inputs: Annotated[list[InputInterface], Field(min_length=1)]
     output: OutputInterface | None = None
-    configs: list[ConfigInterface] = []
+    configs: list[ConfigInterface] | None = None
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
@@ -116,7 +116,7 @@ class ToolInterface(BaseModel):
         if self.output:
             d["output"] = self.output
 
-        if len(self.configs):
+        if self.configs is not None and len(self.configs):
             d["configs"] = self.configs
 
         return d
@@ -161,11 +161,11 @@ class BlockInterface(BaseModel):
     name: str
     version: str = "unknown"
     steps: list[StepInterface]
-    callbacks: list[CallbackInterface] = []
-    outputs: list[OutputInterface] = []
-    configs: list[ConfigInterface] = []
-    tools: list[ToolInterface] = []
-    states: list[StateInterface] = []
+    callbacks: list[CallbackInterface] | None = None
+    outputs: list[OutputInterface] | None = None
+    configs: list[ConfigInterface] | None = None
+    tools: list[ToolInterface] | None = None
+    states: list[StateInterface] | None = None
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
@@ -174,16 +174,16 @@ class BlockInterface(BaseModel):
             "version": self.version,
             "steps": self.steps,
         }
-        if len(self.callbacks):
+        if self.callbacks is not None and len(self.callbacks):
             d["callbacks"] = self.callbacks
 
-        if len(self.outputs):
+        if self.outputs is not None and len(self.outputs):
             d["outputs"] = self.outputs
 
-        if len(self.tools):
+        if self.tools is not None and len(self.tools):
             d["tools"] = self.tools
 
-        if len(self.configs):
+        if self.configs is not None and len(self.configs):
             d["configs"] = self.configs
 
         return d
