@@ -510,13 +510,8 @@ class SmartSpaceWorkspace(BaseModel):
 
 
 class FlowContext(BaseModel):
-    def __init__(
-        self,
-        workspace: SmartSpaceWorkspace,
-        message_history: list[ThreadMessage],
-    ):
-        self.workspace = workspace
-        self.message_history = message_history
+    workspace: SmartSpaceWorkspace | None
+    message_history: list[ThreadMessage] | None
 
 
 class InputDefinition(BaseModel):
