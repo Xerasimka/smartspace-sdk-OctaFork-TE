@@ -30,6 +30,7 @@ from smartspace.models import (
     CallbackInterface,
     ConfigDefinition,
     ConfigInterface,
+    FlowContext,
     FlowValue,
     InputDefinition,
     InputInterface,
@@ -39,7 +40,6 @@ from smartspace.models import (
     StateInterface,
     StepDefinition,
     StepInterface,
-    ThreadMessage,
     ToolDefinition,
     ToolInputDefinition,
     ToolInputReference,
@@ -256,16 +256,6 @@ class ToolInput(Output):
     ):
         super().__init__(definition, value_callback=value_callback)
         self.tool_id = definition.tool_id
-
-
-class FlowContext:
-    def __init__(
-        self,
-        workspace: SmartSpaceWorkspace,
-        message_history: list[ThreadMessage],
-    ):
-        self.workspace = workspace
-        self.message_history = message_history
 
 
 class RegisterToolCallbackFunction(Protocol):

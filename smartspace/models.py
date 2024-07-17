@@ -509,6 +509,16 @@ class SmartSpaceWorkspace(BaseModel):
         return [dataspace.id for dataspace in self.data_spaces]
 
 
+class FlowContext(BaseModel):
+    def __init__(
+        self,
+        workspace: SmartSpaceWorkspace,
+        message_history: list[ThreadMessage],
+    ):
+        self.workspace = workspace
+        self.message_history = message_history
+
+
 class InputDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
