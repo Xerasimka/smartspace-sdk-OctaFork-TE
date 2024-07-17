@@ -595,4 +595,4 @@ class DebugBlockCallback(BaseModel):
 class DebugBlockResult(BaseModel):
     states: dict[str, Any]
     outputs: list[Tuple[ValueSourceRef, Any]]
-    callbacks: list[CallbackCall]
+    callbacks: list[DebugBlockCallback]
