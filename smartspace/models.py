@@ -586,13 +586,25 @@ class BlockDefinition(BaseModel):
     states: dict[str, StateDefinition]
 
 
-class DebugBlockCallback(BaseModel):
-    tool_id: str
-    tool_call_values: list[FlowValue]
-    callback: CallbackCall
+class DebugBlockRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    block_definition: Annotated[BlockDefinition, Field(alias="blockDefinition")]
+    flow_context: Annotated[FlowContext, Field(alias="flowContext")]
+    step_id: Annotated[str, Field(alias="stepId")]
+    inputs: dict[str, FlowValue]
 
 
 class DebugBlockResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    class Callback(BaseModel):
+        model_config = ConfigDict(populate_by_name=True)
+
+        tool_id: Annotated[str, Field(alias="toolId")]
+        tool_call_values: Annotated[list[FlowValue], Field(alias="toolCallValues")]
+        callback: CallbackCall
+
     states: dict[str, Any]
-    outputs: list[Tuple[ValueSourceRef, Any]]
-    callbacks: list[DebugBlockCallback]
+    outputs: list[FlowValue]
+    callbacks: list[Callback]
