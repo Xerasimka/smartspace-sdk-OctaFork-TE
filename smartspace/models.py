@@ -584,3 +584,15 @@ class BlockDefinition(BaseModel):
     steps: dict[str, StepDefinition]
     tools: dict[str, ToolDefinition]
     states: dict[str, StateDefinition]
+
+
+class DebugBlockCallback(BaseModel):
+    tool_id: str
+    tool_call_values: list[FlowValue]
+    callback: CallbackCall
+
+
+class DebugBlockResult(BaseModel):
+    states: dict[str, Any]
+    outputs: list[Tuple[ValueSourceRef, Any]]
+    callbacks: list[CallbackCall]
