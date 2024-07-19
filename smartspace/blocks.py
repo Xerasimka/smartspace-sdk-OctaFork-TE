@@ -8,6 +8,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    ClassVar,
     Concatenate,
     Generic,
     ParamSpec,
@@ -15,12 +16,14 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
 from pydantic import BaseModel, TypeAdapter
 from typing_extensions import get_origin
 
+from smartspace.enums import BlockCategory
 from smartspace.models import (
     BlockDefinition,
     BlockInterface,
@@ -59,6 +62,12 @@ P = ParamSpec("P")
 
 def _issubclass(cls, base):
     return inspect.isclass(cls) and issubclass(get_origin(cls) or cls, base)
+
+
+
+
+
+
 
 
 @lru_cache(maxsize=1000)
@@ -133,6 +142,13 @@ def _get_configs(cls) -> list["ConfigInterface"]:
 
     return configs
 
+
+def metadata(data: dict):
+    def _inner(cls):
+        setattr(cls, "metadata", data)
+        return cls
+
+    return _inner
 
 class ValueSource:
     def __init__(self, value_callback: Callable[[Any], FlowValue]):
@@ -286,6 +302,9 @@ class EmitOutputValueFunction(Protocol):
 
 
 class Block:
+    metadata: ClassVar[dict] = {}
+
+    
     def __init__(
         self,
         register_tool_callback: RegisterToolCallbackFunction,
@@ -489,6 +508,7 @@ class Block:
 
         block_interface = BlockInterface(
             name=cls.__name__,
+            metadata=cls.metadata,
             version=version,
             outputs=outputs,
             steps=steps,
@@ -505,6 +525,8 @@ class DummyToolValue: ...
 
 
 class Tool(abc.ABC, Generic[P, T]):
+    metadata: ClassVar[dict] = {}
+
     class ToolCall(Generic[R]):
         def __init__(self, parent: "Tool[P, T]", values: list[FlowValue]):
             self.parent = parent
@@ -563,6 +585,8 @@ class Tool(abc.ABC, Generic[P, T]):
         return ToolInterface(
             name=name,
             multiple=multiple,
+            metadata=cls.metadata,
+
             inputs=_get_input_interfaces(cls.run),
             output=_get_output_interface("return", cls.run),
             configs=_get_configs(cls),
@@ -636,6 +660,8 @@ class Step(Generic[B, P, T]):
         self.name = fn.__name__
         self._fn = fn
         self._output_name = output_name or f"{self.name}.output"
+        self.metadata: dict = {}
+
 
         class as_tool(Tool):
             def run(self): ...
@@ -652,6 +678,7 @@ class Step(Generic[B, P, T]):
             name=self.name,
             inputs=_get_input_interfaces(self._fn),
             output_ref=self._output_name if output_interface else None,
+            metadata=self.metadata
         )
 
     def input_types(self) -> dict[str, Type]:

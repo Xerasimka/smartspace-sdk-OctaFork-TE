@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from typing import Annotated, Any, ClassVar, Tuple
+from typing import Annotated, Any, ClassVar, Tuple, Union
 from uuid import UUID
 
 import pydantic
@@ -99,7 +99,7 @@ class ConfigInterface(IOCInterface): ...
 
 class ToolInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
+    metadata: dict = {}
     name: str
     multiple: bool
     inputs: Annotated[list[InputInterface], Field(min_length=1)]
@@ -108,7 +108,7 @@ class ToolInterface(BaseModel):
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"name": self.name, "multiple": self.multiple}
+        d: dict[str, Any] = {"name": self.name, "multiple": self.multiple , "metadata": self.metadata}
 
         if len(self.inputs):
             d["inputs"] = self.inputs
@@ -124,14 +124,14 @@ class ToolInterface(BaseModel):
 
 class StepInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
+    metadata: dict = {}
     name: str
     inputs: Annotated[list[InputInterface], Field(min_length=1)]
     output_ref: Annotated[str | None, Field(None, alias="outputRef")]
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"name": self.name, "inputs": self.inputs}
+        d: dict[str, Any] = {"name": self.name, "inputs": self.inputs , 'metadata':self.metadata}
 
         if self.output_ref:
             d["outputRef"] = self.output_ref
@@ -157,6 +157,7 @@ class StateInterface(BaseModel):
 
 class BlockInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     name: str
     version: str = "unknown"
@@ -173,6 +174,7 @@ class BlockInterface(BaseModel):
             "name": self.name,
             "version": self.version,
             "steps": self.steps,
+            "metadata":self.metadata
         }
         if len(self.callbacks):
             d["callbacks"] = self.callbacks
@@ -571,7 +573,6 @@ class StateDefinition(BaseModel):
 
 class BlockDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
     id: str
     type: BlockType
     configs: dict[str, ConfigDefinition]
