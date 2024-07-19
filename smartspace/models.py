@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, timezone
-from typing import Annotated, Any, ClassVar, Tuple, Union
+from typing import Annotated, Any, ClassVar, Tuple
 from uuid import UUID
 
 import pydantic
@@ -89,7 +89,7 @@ class IOCInterface(BaseModel):
 
 class InputInterface(IOCInterface):
     sticky: bool
-    metadata: dict
+    metadata: dict = {}
 
 
 class OutputInterface(IOCInterface): ...
@@ -109,7 +109,11 @@ class ToolInterface(BaseModel):
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"name": self.name, "multiple": self.multiple , "metadata": self.metadata}
+        d: dict[str, Any] = {
+            "name": self.name,
+            "multiple": self.multiple,
+            "metadata": self.metadata,
+        }
 
         if len(self.inputs):
             d["inputs"] = self.inputs
@@ -132,7 +136,11 @@ class StepInterface(BaseModel):
 
     @model_serializer
     def _serialize(self) -> dict[str, Any]:
-        d: dict[str, Any] = {"name": self.name, "inputs": self.inputs , 'metadata':self.metadata}
+        d: dict[str, Any] = {
+            "name": self.name,
+            "inputs": self.inputs,
+            "metadata": self.metadata,
+        }
 
         if self.output_ref:
             d["outputRef"] = self.output_ref
@@ -175,7 +183,7 @@ class BlockInterface(BaseModel):
             "name": self.name,
             "version": self.version,
             "steps": self.steps,
-            "metadata":self.metadata
+            "metadata": self.metadata,
         }
         if self.callbacks is not None and len(self.callbacks):
             d["callbacks"] = self.callbacks
