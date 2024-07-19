@@ -223,15 +223,16 @@ def debug(path: str = ""):
 
 def _load_blocks(path: str) -> list[type[Block]]:
     import glob
+    import os
     import sys
-    from os.path import basename, dirname, isfile, join
+    from os.path import basename, isfile, join
 
     blocks: list[type[Block]] = []
 
     if isfile(path):
         if path.endswith(".py"):
             module_name = (
-                path.removeprefix(dirname(__file__)).replace("/", ".")[:-3].strip(".")
+                path.removeprefix(os.getcwd()).replace("/", ".")[:-3].strip(".")
             )
             if module_name in sys.modules:
                 del sys.modules[module_name]
