@@ -22,8 +22,8 @@ app = typer.Typer()
 @app.command()
 def debug(path: str = ""):
     import asyncio
+    import os
     from contextlib import suppress
-    from os.path import dirname
 
     from pysignalr.client import SignalRClient
     from pysignalr.messages import (
@@ -38,7 +38,7 @@ def debug(path: str = ""):
 
     import smartspace.cli.auth
 
-    root_path = path if path != "" else dirname(__file__)
+    root_path = path if path != "" else os.getcwd()
 
     message_encoder = MessageEncoder()
 
