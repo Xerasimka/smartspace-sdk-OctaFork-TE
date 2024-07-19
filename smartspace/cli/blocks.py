@@ -1,4 +1,3 @@
-import importlib
 import uuid
 from typing import Any
 
@@ -20,7 +19,7 @@ app = typer.Typer()
 
 
 @app.command()
-def debug(path: str = ""):
+def debug(path: str = "", poll: bool = False):
     import asyncio
     import os
     from contextlib import suppress
@@ -35,6 +34,7 @@ def debug(path: str = ""):
     from pysignalr.protocol.json import JSONProtocol, MessageEncoder
     from watchdog.events import FileSystemEvent, FileSystemEventHandler
     from watchdog.observers import Observer
+    from watchdog.observers.polling import PollingObserver
 
     import smartspace.cli.auth
 
@@ -66,7 +66,7 @@ def debug(path: str = ""):
             request = DebugBlockRequest.model_validate(message.arguments[0])
 
             print(
-                f"run_block received for {request.block_definition.type.name} with values {request.inputs}"
+                f"Running block {request.block_definition.type.name} ({request.block_definition.type.version})"
             )
 
             block = first(
@@ -154,7 +154,6 @@ def debug(path: str = ""):
         await register_blocks(root_path)
 
     async def register_blocks(path: str):
-        print(f"Looking for blocks in {path}")
         updated_blocks = [(b.interface(), b) for b in _load_blocks(path)]
         old_blocks = blocks.copy()
 
@@ -175,9 +174,12 @@ def debug(path: str = ""):
         )
 
         for block_interface, _ in updated_blocks:
-            print(f"Registering block {block_interface.name}")
-            data = block_interface.model_dump(by_alias=True)
-            await client.send("registerblock", [data])
+            if not any(
+                [b_interface == block_interface for (b_interface, _) in old_blocks]
+            ):
+                print(f"Registering updated interface for {block_interface.name} block")
+                data = block_interface.model_dump(by_alias=True)
+                await client.send("registerblock", [data])
 
     client.on_open(on_open)
     client.on_close(on_close)
@@ -189,11 +191,7 @@ def debug(path: str = ""):
             self.loop = loop
 
         def _on_any_event(self, event: FileSystemEvent):
-            if not event.is_directory:
-                print(event)  # Your code here
-                asyncio.run_coroutine_threadsafe(
-                    register_blocks(event.src_path), self.loop
-                )
+            asyncio.run_coroutine_threadsafe(register_blocks(root_path), self.loop)
 
         def on_created(self, event: FileSystemEvent):
             self._on_any_event(event)
@@ -210,10 +208,10 @@ def debug(path: str = ""):
     async def main():
         loop = asyncio.get_event_loop()
         handler = _EventHandler(loop)
-        observer = Observer()
+        observer = PollingObserver() if poll else Observer()
         observer.schedule(handler, root_path, recursive=True)
         observer.start()
-        print("Observer started")
+        print(f"Watching for file changes in {root_path}")
 
         await client.run()
 
@@ -223,57 +221,25 @@ def debug(path: str = ""):
 
 def _load_blocks(path: str) -> list[type[Block]]:
     import glob
-    import os
+    import importlib
     import sys
-    from os.path import basename, isfile, join
+    from os.path import isfile, join
 
     blocks: list[type[Block]] = []
 
     if isfile(path):
-        if path.endswith(".py"):
-            module_name = (
-                path.removeprefix(os.getcwd()).replace("/", ".")[:-3].strip(".")
-            )
-            if module_name in sys.modules:
-                del sys.modules[module_name]
+        files = [path]
+    else:
+        files = glob.glob(join(path, "**/*.py"))
 
-            module = importlib.import_module(module_name)
-            for name in dir(module):
-                if not name.startswith("_"):
-                    item = getattr(module, name)
-                    if (
-                        my_issubclass(item, Block)
-                        and item != Block
-                        and not any([b == item for b in blocks])
-                    ):
-                        blocks.append(item)
-        return blocks
-
-    def get_python_files(nested_path: str):
-        files_and_folders = glob.glob(join(path, nested_path, "*"))
-        files = [
-            join(nested_path, basename(f))
-            for f in files_and_folders
-            if isfile(f) and f.endswith(".py") and not f.endswith("__init__.py")
-        ]
-        folders = [
-            join(nested_path, basename(f))
-            for f in files_and_folders
-            if not isfile(f)
-            and not f.startswith(".")
-            and not basename(f).startswith("_")
-        ]
-
-        for folder in folders:
-            files.extend(get_python_files(folder))
-
-        return files
-
-    python_files = get_python_files("")
-
-    for file in python_files:
+    for file in files:
         module_name = file.replace("/", ".")[:-3]
-        module = importlib.import_module(module_name)
+
+        spec = importlib.util.spec_from_file_location(module_name, file)  # type: ignore
+        module = importlib.util.module_from_spec(spec)  # type: ignore
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+
         for name in dir(module):
             if not name.startswith("_"):
                 item = getattr(module, name)
