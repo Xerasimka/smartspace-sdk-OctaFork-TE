@@ -143,12 +143,19 @@ def _get_configs(cls) -> list["ConfigInterface"]:
     return configs
 
 
-def metadata(data: dict):
+def metadata(**kwargs):
     def _inner(cls):
-        setattr(cls, "metadata", data)
+        setattr(cls, "metadata", kwargs)
         return cls
 
     return _inner
+
+class Metadata:
+    def __init__(self, **kwargs):
+        self.data = kwargs
+
+
+
 
 class ValueSource:
     def __init__(self, value_callback: Callable[[Any], FlowValue]):
