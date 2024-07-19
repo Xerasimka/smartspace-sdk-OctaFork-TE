@@ -106,13 +106,14 @@ def _get_input_interfaces(callable: Callable) -> list["InputInterface"]:
                 ]
             ),
 
-            metadata=first(
-                [
+            metadata = next(
+                (
                     metadata.data
                     for metadata in getattr(annotation, "__metadata__", [])
                     if type(metadata) is Metadata
-                ]
-            ),
+                ),
+                {}
+            )
         )
         for name, annotation in _get_parameter_names_and_types(callable).items()
     ]
