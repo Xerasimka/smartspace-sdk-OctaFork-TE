@@ -83,12 +83,24 @@ def get_token() -> str:
 
 
 def _get_config():
-    import smartspace.cli.local_config
+    import smartspace.cli.config
 
-    config = smartspace.cli.local_config.load_config()
-    if config is None:
+    config = smartspace.cli.config.load_config()
+    if not config["client_id"] and config["tenant_id"]:
         print(
-            "No config has been set. Please run 'smartspace config' before trying to login"
+            "You must set your client ID before logging in. Use 'smartspace config --client-id <Your SmartSpace Client ID>'"
+        )
+        exit()
+
+    if config["client_id"] and not config["tenant_id"]:
+        print(
+            "You must set your tenant ID before logging in. Use 'smartspace config --tenant-id <Your Microsoft Tenant ID>'"
+        )
+        exit()
+
+    if not config["client_id"] and not config["tenant_id"]:
+        print(
+            "You must set your tenant ID and client ID before logging in. Use 'smartspace config --tenant-id <Your Microsoft Tenant ID>' --client-id <Your SmartSpace Client ID>"
         )
         exit()
 

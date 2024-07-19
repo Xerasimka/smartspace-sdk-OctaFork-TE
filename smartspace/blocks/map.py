@@ -1,8 +1,7 @@
 from typing import Annotated, Any
 
-from smartspace.blocks import (
+from smartspace.core import (
     Block,
-    Config,
     Output,
     State,
     Tool,
@@ -11,11 +10,9 @@ from smartspace.blocks import (
 )
 
 
-class MapTest(Block):
+class Map(Block):
     class Operation(Tool):
         def run(self, item: Any) -> Any: ...
-
-    c: Config[str]
 
     run: Operation
 

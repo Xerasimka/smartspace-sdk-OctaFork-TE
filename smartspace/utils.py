@@ -6,7 +6,7 @@ from typing_extensions import get_origin
 from smartspace.enums import BlockCategory
 
 
-def my_issubclass(cls, base):
+def _issubclass(cls, base):
     return inspect.isclass(cls) and issubclass(get_origin(cls) or cls, base)
 
 
@@ -28,11 +28,11 @@ def get_parameter_names_and_types(callable: Callable):
     ]
 
 
-
 def description(text: str):
     def __inner(cls):
         cls.description = text
         return cls
+
     return __inner
 
 
@@ -40,4 +40,5 @@ def category(category: BlockCategory):
     def __inner(cls):
         cls.category = category.value
         return cls
+
     return __inner

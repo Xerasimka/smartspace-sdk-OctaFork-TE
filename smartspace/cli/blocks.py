@@ -4,7 +4,7 @@ from typing import Any
 import typer
 from more_itertools import first
 
-from smartspace.blocks import Block
+from smartspace.core import Block
 from smartspace.models import (
     BlockInterface,
     CallbackCall,
@@ -13,7 +13,6 @@ from smartspace.models import (
     FlowValue,
     ValueSourceRef,
 )
-from smartspace.utils import my_issubclass
 
 app = typer.Typer()
 
@@ -36,9 +35,21 @@ def debug(path: str = "", poll: bool = False):
     from watchdog.observers import Observer
     from watchdog.observers.polling import PollingObserver
 
+    import smartspace.blocks
     import smartspace.cli.auth
+    import smartspace.cli.config
+
+    config = smartspace.cli.config.load_config()
+
+    if not config["config_api_url"]:
+        print(
+            "You must set your API url before creating blocks. Use 'smartspace config --api-url <Your SmartSpace API Url>'"
+        )
+        exit()
 
     root_path = path if path != "" else os.getcwd()
+
+    print(f"Debugging blocks in '{root_path}'")
 
     message_encoder = MessageEncoder()
 
@@ -53,7 +64,7 @@ def debug(path: str = "", poll: bool = False):
                 return JSONProtocol.encode(self, message)
 
     client = SignalRClient(
-        url="http://host.docker.internal:5056/debug",
+        url=f"{config['config_api_url']}/debug",
         access_token_factory=smartspace.cli.auth.get_token,
         headers={"Authorization": f"Bearer {smartspace.cli.auth.get_token()}"},
         protocol=MyJSONProtocol(),
@@ -150,11 +161,10 @@ def debug(path: str = "", poll: bool = False):
         print(f"Received error: {message.error}")
 
     async def on_open() -> None:
-        print("Connected to the server")
         await register_blocks(root_path)
 
     async def register_blocks(path: str):
-        updated_blocks = [(b.interface(), b) for b in _load_blocks(path)]
+        updated_blocks = [(b.interface(), b) for b in smartspace.blocks.load(path)]
         old_blocks = blocks.copy()
 
         blocks.clear()
@@ -173,11 +183,17 @@ def debug(path: str = "", poll: bool = False):
             + updated_blocks
         )
 
+        if len(blocks):
+            print(
+                f"Found the following blocks\n{', '.join([b.name for b, _ in blocks])}"
+            )
+        else:
+            print("Found no blocks")
+
         for block_interface, _ in updated_blocks:
             if not any(
                 [b_interface == block_interface for (b_interface, _) in old_blocks]
             ):
-                print(f"Registering updated interface for {block_interface.name} block")
                 data = block_interface.model_dump(by_alias=True)
                 await client.send("registerblock", [data])
 
@@ -191,6 +207,7 @@ def debug(path: str = "", poll: bool = False):
             self.loop = loop
 
         def _on_any_event(self, event: FileSystemEvent):
+            print("Refreshing blocks...")
             asyncio.run_coroutine_threadsafe(register_blocks(root_path), self.loop)
 
         def on_created(self, event: FileSystemEvent):
@@ -211,7 +228,6 @@ def debug(path: str = "", poll: bool = False):
         observer = PollingObserver() if poll else Observer()
         observer.schedule(handler, root_path, recursive=True)
         observer.start()
-        print(f"Watching for file changes in {root_path}")
 
         await client.run()
 
@@ -219,38 +235,36 @@ def debug(path: str = "", poll: bool = False):
         asyncio.run(main())
 
 
-def _load_blocks(path: str) -> list[type[Block]]:
-    import glob
-    import importlib
-    import sys
-    from os.path import isfile, join
+# def _load_blocks(path: str) -> list[type[Block]]:
+#     import glob
+#     import importlib.util
+#     import sys
+#     from os.path import isfile, join
 
-    blocks: list[type[Block]] = []
+#     blocks: list[type[Block]] = []
 
-    if isfile(path):
-        files = [path]
-    else:
-        files = glob.glob(join(path, "**/*.py"))
+#     if isfile(path):
+#         files = [path]
+#     else:
+#         files = glob.glob(join(path, "**/*.py"), recursive=True)
 
-    for file in files:
-        module_name = file.replace("/", ".")[:-3]
+#     for file in files:
+#         module_name = file.replace("/", ".")[:-3]
 
-        spec = importlib.util.spec_from_file_location(module_name, file)  # type: ignore
-        module = importlib.util.module_from_spec(spec)  # type: ignore
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
+#         spec = importlib.util.spec_from_file_location(module_name, file)
+#         module = importlib.util.module_from_spec(spec)
+#         sys.modules[module_name] = module
+#         spec.loader.exec_module(module)
+#         for name in dir(module):
+#             item = getattr(module, name)
+#             if (
+#                 _issubclass(item, Block)
+#                 and item != Block
+#                 and not any([b == item for b in blocks])
+#             ):
+#                 blocks.append(item)
 
-        for name in dir(module):
-            if not name.startswith("_"):
-                item = getattr(module, name)
-                if (
-                    my_issubclass(item, Block)
-                    and item != Block
-                    and not any([b == item for b in blocks])
-                ):
-                    blocks.append(item)
-
-    return blocks
+#     return blocks
 
 
 if __name__ == "__main__":

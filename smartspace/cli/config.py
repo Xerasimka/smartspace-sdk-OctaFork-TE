@@ -7,14 +7,14 @@ class SmartSpaceConfig(TypedDict):
     config_api_url: str | None
 
 
-def load_config() -> SmartSpaceConfig | None:
+def load_config() -> SmartSpaceConfig:
     import json
 
     try:
         with open(_get_config_file_path(), "r") as f:
             return json.load(f)
     except FileNotFoundError:
-        return None
+        return SmartSpaceConfig(client_id=None, config_api_url=None, tenant_id=None)
 
 
 def save_config(config: SmartSpaceConfig):

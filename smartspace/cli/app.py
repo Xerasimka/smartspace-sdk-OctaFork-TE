@@ -1,28 +1,33 @@
-from typing import Annotated
+import json
+from typing import Annotated, Optional
 
 import typer
 
 from smartspace.cli import blocks
-
-# client_id = "30101e46-ba13-4957-b610-233f56ebb94f"
-# local_config.save_config(
-#     {
-#         "client_id": "e3f39d90-9235-435e-ba49-681727352613",
-#         "tenant_id": "fd656490-ea47-45d1-a9a2-d102f4d92017",
-#         "config_api_url": "TODO",
-#     }
-# )
+from smartspace.cli.config import SmartSpaceConfig
 
 app = typer.Typer()
 app.add_typer(blocks.app, name="blocks")
 
 
 @app.command()
-def hello():
-    from smartspace.cli import auth
+def config(
+    apiUrl: Annotated[Optional[str], typer.Option("--api-url")] = None,
+    tenantId: Annotated[Optional[str], typer.Option("--tenant-id")] = None,
+    clientId: Annotated[Optional[str], typer.Option("--client-id")] = None,
+):
+    from smartspace.cli.config import load_config, save_config
 
-    token = auth.get_token()
-    print(token)
+    current_config = load_config()
+    new_config = SmartSpaceConfig(
+        config_api_url=current_config["config_api_url"] if apiUrl is None else apiUrl,
+        tenant_id=current_config["tenant_id"] if tenantId is None else tenantId,
+        client_id=current_config["client_id"] if clientId is None else clientId,
+    )
+    save_config(new_config)
+
+    print("Config updated")
+    print(json.dumps(new_config, indent=2))
 
 
 @app.command()
