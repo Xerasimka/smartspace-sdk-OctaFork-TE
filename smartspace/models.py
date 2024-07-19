@@ -66,6 +66,32 @@ class ToolOutputReference(ToolReference):
     output_id: Annotated[str, Field(alias="outputId")]
 
 
+class FlowInputReference(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    flow_input_id: Annotated[str, Field(alias="flowInputId")]
+
+
+class FlowOutputReference(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    flow_output_id: Annotated[str, Field(alias="flowOutputId")]
+
+
+class ChildFlowOutputReference(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    flow_id: Annotated[str, Field(alias="flowId")]
+    flow_output_id: Annotated[str, Field(alias="flowOutputId")]
+
+
+class ChildFlowInputReference(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    flow_id: Annotated[str, Field(alias="flowId")]
+    flow_input_id: Annotated[str, Field(alias="flowInputId")]
+
+
 class BlockType(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -209,32 +235,6 @@ class FlowIODefinition(BaseModel):
     @classmethod
     def from_type(cls, name: str, t: type):
         return FlowIODefinition(name=name, json_schema=TypeAdapter(t).json_schema())
-
-
-class FlowInputReference(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    flow_input_id: Annotated[str, Field(alias="flowInputId")]
-
-
-class FlowOutputReference(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    flow_output_id: Annotated[str, Field(alias="flowOutputId")]
-
-
-class ChildFlowOutputReference(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    flow_id: Annotated[str, Field(alias="flowId")]
-    flow_output_id: Annotated[str, Field(alias="flowOutputId")]
-
-
-class ChildFlowInputReference(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    flow_id: Annotated[str, Field(alias="flowId")]
-    flow_input_id: Annotated[str, Field(alias="flowInputId")]
 
 
 class ValueSourceType(enum.Enum):
