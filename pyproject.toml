@@ -24,6 +24,9 @@ pydantic-extra-types = "2.0.0"
 pydantic-settings = "2.0.3"
 pydantic-core = "2.6.1"
 jsonschema = "^4.23.0"
+more-itertools = "^10.3.0"
+pymssql = "^2.3.0"
+jsonpath-ng = "^1.6.1"
 
 
 [tool.poetry.group.dev.dependencies]

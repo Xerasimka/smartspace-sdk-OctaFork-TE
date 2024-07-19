@@ -22,6 +22,7 @@ from typing import (
 
 from pydantic import BaseModel, TypeAdapter
 from typing_extensions import get_origin
+from more_itertools import first
 
 from smartspace.enums import BlockCategory
 from smartspace.models import (
@@ -102,6 +103,14 @@ def _get_input_interfaces(callable: Callable) -> list["InputInterface"]:
                     metadata.sticky
                     for metadata in getattr(annotation, "__metadata__", [])
                     if type(metadata) is InputConfig
+                ]
+            ),
+
+            metadata=first(
+                [
+                    metadata.data
+                    for metadata in getattr(annotation, "__metadata__", [])
+                    if type(metadata) is Metadata
                 ]
             ),
         )

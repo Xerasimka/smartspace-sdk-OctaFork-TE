@@ -89,6 +89,7 @@ class IOCInterface(BaseModel):
 
 class InputInterface(IOCInterface):
     sticky: bool
+    metadata: dict
 
 
 class OutputInterface(IOCInterface): ...
