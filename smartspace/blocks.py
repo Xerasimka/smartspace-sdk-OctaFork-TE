@@ -8,6 +8,7 @@ from typing import (
     Any,
     Awaitable,
     Callable,
+    ClassVar,
     Concatenate,
     Generic,
     ParamSpec,
@@ -15,12 +16,15 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    Union,
     cast,
 )
 
 from pydantic import BaseModel, TypeAdapter
 from typing_extensions import get_origin
+from more_itertools import first
 
+from smartspace.enums import BlockCategory
 from smartspace.models import (
     BlockDefinition,
     BlockInterface,
@@ -61,6 +65,12 @@ def _issubclass(cls, base):
     return inspect.isclass(cls) and issubclass(get_origin(cls) or cls, base)
 
 
+
+
+
+
+
+
 @lru_cache(maxsize=1000)
 def _get_parameter_names_and_types(callable: Callable):
     signature = inspect.signature(callable)
@@ -95,6 +105,15 @@ def _get_input_interfaces(callable: Callable) -> list["InputInterface"]:
                     if type(metadata) is InputConfig
                 ]
             ),
+
+            metadata = next(
+                (
+                    metadata.data
+                    for metadata in getattr(annotation, "__metadata__", [])
+                    if type(metadata) is Metadata
+                ),
+                {}
+            )
         )
         for name, annotation in _get_parameter_names_and_types(callable).items()
     ]
@@ -132,6 +151,20 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                 )
 
     return configs
+
+
+def metadata(**kwargs):
+    def _inner(cls):
+        setattr(cls, "metadata", kwargs)
+        return cls
+
+    return _inner
+
+class Metadata:
+    def __init__(self, **kwargs):
+        self.data = kwargs
+
+
 
 
 class ValueSource:
@@ -276,6 +309,9 @@ class EmitOutputValueFunction(Protocol):
 
 
 class Block:
+    metadata: ClassVar[dict] = {}
+
+    
     def __init__(
         self,
         register_tool_callback: RegisterToolCallbackFunction,
@@ -479,6 +515,7 @@ class Block:
 
         block_interface = BlockInterface(
             name=cls.__name__,
+            metadata=cls.metadata,
             version=version,
             outputs=outputs,
             steps=steps,
@@ -495,6 +532,8 @@ class DummyToolValue: ...
 
 
 class Tool(abc.ABC, Generic[P, T]):
+    metadata: ClassVar[dict] = {}
+
     class ToolCall(Generic[R]):
         def __init__(self, parent: "Tool[P, T]", values: list[FlowValue]):
             self.parent = parent
@@ -553,6 +592,8 @@ class Tool(abc.ABC, Generic[P, T]):
         return ToolInterface(
             name=name,
             multiple=multiple,
+            metadata=cls.metadata,
+
             inputs=_get_input_interfaces(cls.run),
             output=_get_output_interface("return", cls.run),
             configs=_get_configs(cls),
@@ -626,6 +667,8 @@ class Step(Generic[B, P, T]):
         self.name = fn.__name__
         self._fn = fn
         self._output_name = output_name or f"{self.name}.output"
+        self.metadata: dict = {}
+
 
         class as_tool(Tool):
             def run(self): ...
@@ -642,6 +685,7 @@ class Step(Generic[B, P, T]):
             name=self.name,
             inputs=_get_input_interfaces(self._fn),
             output_ref=self._output_name if output_interface else None,
+            metadata=self.metadata
         )
 
     def input_types(self) -> dict[str, Type]:

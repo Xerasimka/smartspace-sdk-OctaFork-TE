@@ -33,6 +33,9 @@ azure-identity = "^1.17.1"
 msal = "^1.29.0"
 pysignalr = {git = "https://github.com/baking-bad/pysignalr"}
 watchdog = "4.0.1"
+more-itertools = "^10.3.0"
+pymssql = "^2.3.0"
+jsonpath-ng = "^1.6.1"
 
 
 [tool.poetry.group.dev.dependencies]
