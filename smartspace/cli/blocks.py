@@ -164,38 +164,66 @@ def debug(path: str = "", poll: bool = False):
         await register_blocks(root_path)
 
     async def register_blocks(path: str):
-        updated_blocks = [(b.interface(), b) for b in smartspace.blocks.load(path)]
-        old_blocks = blocks.copy()
-
-        blocks.clear()
-        blocks.extend(
-            [
-                b
-                for b in old_blocks
-                if not any(
-                    [
-                        updated_block[0].name == b[0].name
-                        and updated_block[0].version == b[0].version
-                        for updated_block in updated_blocks
-                    ]
-                )
-            ]
-            + updated_blocks
-        )
-
-        if len(blocks):
-            print(
-                f"Found the following blocks\n{', '.join([b.name for b, _ in blocks])}"
+        found_blocks = [
+            (b.interface(version="debug"), b) for b in smartspace.blocks.load(path)
+        ]
+        new_blocks = [
+            b
+            for b in found_blocks
+            if not any(
+                [
+                    old_block[0].name == b[0].name
+                    and old_block[0].version == b[0].version
+                    for old_block in blocks
+                ]
             )
-        else:
-            print("Found no blocks")
+        ]
+
+        updated_blocks = [
+            b
+            for b in found_blocks
+            if any(
+                [
+                    old_block[0].name == b[0].name
+                    and old_block[0].version == b[0].version
+                    and old_block[0] != b[0]
+                    for old_block in blocks
+                ]
+            )
+        ]
+
+        removed_blocks = [
+            old_block
+            for old_block in blocks
+            if not any(
+                [
+                    old_block[0].name == b[0].name
+                    and old_block[0].version == b[0].version
+                    for b in found_blocks
+                ]
+            )
+        ]
 
         for block_interface, _ in updated_blocks:
-            if not any(
-                [b_interface == block_interface for (b_interface, _) in old_blocks]
-            ):
-                data = block_interface.model_dump(by_alias=True)
-                await client.send("registerblock", [data])
+            print(f"Updating {block_interface.name}")
+            data = block_interface.model_dump(by_alias=True)
+            await client.send("registerblock", [data])
+
+        for block_interface, _ in new_blocks:
+            print(f"Registering {block_interface.name}")
+            data = block_interface.model_dump(by_alias=True)
+            await client.send("registerblock", [data])
+
+        for block_interface, _ in removed_blocks:
+            print(f"Removing {block_interface.name}")
+            data = block_interface.model_dump(by_alias=True)
+            await client.send("removeblock", [data])
+
+        blocks.clear()
+        blocks.extend(found_blocks)
+
+        if not len(blocks):
+            print("Found no blocks")
 
     client.on_open(on_open)
     client.on_close(on_close)
@@ -207,7 +235,6 @@ def debug(path: str = "", poll: bool = False):
             self.loop = loop
 
         def _on_any_event(self, event: FileSystemEvent):
-            print("Refreshing blocks...")
             asyncio.run_coroutine_threadsafe(register_blocks(root_path), self.loop)
 
         def on_created(self, event: FileSystemEvent):
@@ -233,38 +260,6 @@ def debug(path: str = "", poll: bool = False):
 
     with suppress(KeyboardInterrupt, asyncio.CancelledError):
         asyncio.run(main())
-
-
-# def _load_blocks(path: str) -> list[type[Block]]:
-#     import glob
-#     import importlib.util
-#     import sys
-#     from os.path import isfile, join
-
-#     blocks: list[type[Block]] = []
-
-#     if isfile(path):
-#         files = [path]
-#     else:
-#         files = glob.glob(join(path, "**/*.py"), recursive=True)
-
-#     for file in files:
-#         module_name = file.replace("/", ".")[:-3]
-
-#         spec = importlib.util.spec_from_file_location(module_name, file)
-#         module = importlib.util.module_from_spec(spec)
-#         sys.modules[module_name] = module
-#         spec.loader.exec_module(module)
-#         for name in dir(module):
-#             item = getattr(module, name)
-#             if (
-#                 _issubclass(item, Block)
-#                 and item != Block
-#                 and not any([b == item for b in blocks])
-#             ):
-#                 blocks.append(item)
-
-#     return blocks
 
 
 if __name__ == "__main__":
