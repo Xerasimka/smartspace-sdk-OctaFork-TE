@@ -38,6 +38,10 @@ class Map(Block):
 
     @step()
     async def map(self, items: list[Any]):
+        if len(items) == 0:
+            self.results.emit([])
+            return
+
         self.results_state = [None] * len(items)
         self.count = len(items)
         for i, item in enumerate(items):
