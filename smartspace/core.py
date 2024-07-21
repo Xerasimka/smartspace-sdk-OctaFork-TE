@@ -380,7 +380,12 @@ class Block:
             else:
                 setattr(self, config_name, config_definition.value)
 
-        tool_groups: dict[str, dict[str, Tool]] = {}
+        tool_groups: dict[str, dict[str, Tool]] = {
+            field_name: {}
+            for field_name, field_type in self.__class__.__annotations__.items()
+            if get_origin(field_type) is dict
+            and _issubclass(field_type.__args__[1], Tool)
+        }
 
         for tool_name, tool_definition in self._definition.tools.items():
             inputs = {
@@ -414,9 +419,6 @@ class Block:
             if len(tool_path) == 1:
                 setattr(self, tool_name, self._tools[tool_name])
             else:
-                if tool_path[0] not in tool_groups:
-                    tool_groups[tool_path[0]] = {}
-
                 tool_groups[tool_path[0]][tool_path[1]] = self._tools[tool_name]
 
         for (
