@@ -83,13 +83,14 @@ class IOCInterface(BaseModel):
 
     name: str
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
 
 
 class InputInterface(IOCInterface):
     sticky: bool
-    metadata: dict
+
 
 
 class OutputInterface(IOCInterface): ...
@@ -159,7 +160,6 @@ class StateInterface(BaseModel):
 class BlockInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     metadata: dict = {}
-
     name: str
     version: str = "unknown"
     steps: list[StepInterface]
@@ -205,12 +205,14 @@ class FlowIODefinition(BaseModel):
 
 class FlowInputReference(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     flow_input_id: Annotated[str, Field(alias="flowInputId")]
 
 
 class FlowOutputReference(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     flow_output_id: Annotated[str, Field(alias="flowOutputId")]
 
@@ -514,7 +516,7 @@ class SmartSpaceWorkspace(BaseModel):
 
 class InputDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
+    metadata: dict = {}
     id: str
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
     sticky: bool
@@ -522,6 +524,7 @@ class InputDefinition(BaseModel):
 
 class OutputDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     id: str
     json_schema: Annotated[dict[str, Any], Field(alias="jsonSchema")]
@@ -529,12 +532,14 @@ class OutputDefinition(BaseModel):
 
 class ToolInputDefinition(OutputDefinition):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     tool_id: Annotated[str, Field(alias="toolId")]
 
 
 class ToolOutputDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     id: str
     tool_id: Annotated[str, Field(alias="toolId")]
@@ -543,6 +548,7 @@ class ToolOutputDefinition(BaseModel):
 
 class StepDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
 
     id: str
     inputs: dict[str, InputDefinition]
@@ -558,7 +564,7 @@ class ConfigDefinition(BaseModel):
 
 class ToolDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
+    metadata: dict = {}
     id: str
     inputs: dict[str, ToolInputDefinition]
     output: ToolOutputDefinition | None
@@ -574,6 +580,7 @@ class StateDefinition(BaseModel):
 
 class BlockDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
+    metadata: dict = {}
     id: str
     type: BlockType
     configs: dict[str, ConfigDefinition]
