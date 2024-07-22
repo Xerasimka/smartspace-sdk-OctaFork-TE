@@ -68,14 +68,12 @@ class ToolOutputReference(ToolReference):
 
 class FlowInputReference(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    metadata: dict = {}
 
     flow_input_id: Annotated[str, Field(alias="flowInputId")]
 
 
 class FlowOutputReference(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    metadata: dict = {}
 
     flow_output_id: Annotated[str, Field(alias="flowOutputId")]
 
@@ -118,7 +116,6 @@ class IOCInterface(BaseModel):
 
 class InputInterface(IOCInterface):
     sticky: bool
-    metadata: dict = {}
 
 
 class OutputInterface(IOCInterface): ...

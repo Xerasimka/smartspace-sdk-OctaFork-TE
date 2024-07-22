@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Smartspace blocks",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "smartspace",
+            "args": ["blocks", "debug", "--poll", "--path", "smartspace/blocks"]
+        }
+    ]
+}
