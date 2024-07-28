@@ -1,7 +1,6 @@
 import abc
 import asyncio
 import inspect
-import json
 from functools import lru_cache, partial
 from typing import (
     Annotated,
@@ -190,24 +189,13 @@ class State:
     ):
         self.step_id = step_id
         self.input_ids = input_ids
-        self.default_value_class = default_value.__class__
-        self.default_value_is_pydantic_model = _issubclass(
-            self.default_value_class, BaseModel
-        )
-        self.default_value_json = (
-            json.dumps(default_value)
-            if not self.default_value_is_pydantic_model
-            else cast(BaseModel, default_value).model_dump_json()
-        )
+        self.default_value_type_adapter = TypeAdapter(default_value.__class__)
+        self.default_value_json = self.default_value_type_adapter.dump_json(
+            default_value
+        ).decode()
 
     def get_default_value(self) -> Any | None:
-        return (
-            json.loads(self.default_value_json)
-            if not self.default_value_is_pydantic_model
-            else cast(type[BaseModel], self.default_value_class).model_validate_json(
-                self.default_value_json
-            )
-        )
+        return self.default_value_type_adapter.validate_json(self.default_value_json)
 
     def interface(self, name: str) -> StateInterface:
         return StateInterface(
@@ -367,18 +355,11 @@ class Block:
         for config_name, config_definition in self._definition.configs.items():
             field_type = self.__class__.__annotations__[config_name]
             config_type = field_type.__args__[0]
-
-            if _issubclass(config_type, BaseModel) and isinstance(
-                config_definition.value, dict
-            ):
-                config_type = cast(type[BaseModel], config_type)
-                setattr(
-                    self,
-                    config_name,
-                    config_type.model_validate(config_definition.value),
-                )
-            else:
-                setattr(self, config_name, config_definition.value)
+            setattr(
+                self,
+                config_name,
+                TypeAdapter(config_type).validate_python(config_definition.value),
+            )
 
         tool_groups: dict[str, dict[str, Tool]] = {
             field_name: {}
@@ -623,19 +604,7 @@ class StepInstance(Generic[B, P, T]):
 
         for input_name, value in kwargs.items():
             input_type = input_types[input_name]
-            o = get_origin(input_type)
-            if _issubclass(input_type, BaseModel) and isinstance(value, dict):
-                input_type = cast(type[BaseModel], input_type)
-                step_kwargs[input_name] = input_type.model_validate(value)
-            elif o is list:
-                value = cast(list[Any], value)
-                item_type: type = input_type.__args__[0]
-                if _issubclass(item_type, BaseModel) and isinstance(value, dict):
-                    step_kwargs[input_name] = [item_type.validate(v) for v in value]
-                else:
-                    step_kwargs[input_name] = value
-            else:
-                step_kwargs[input_name] = value
+            step_kwargs[input_name] = TypeAdapter(input_type).validate_python(value)
 
         result = await self.step._fn(self.parent_block, *tuple(), **kwargs)
         if self.output:
