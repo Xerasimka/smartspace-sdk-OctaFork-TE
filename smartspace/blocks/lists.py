@@ -80,7 +80,7 @@ class Collect(Block):
     @step()
     async def collect(
         self,
-        item: str,
+        item: Any,
         count: Annotated[int, InputConfig(sticky=True)],
     ):
         self.items_state.append(item)
