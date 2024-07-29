@@ -19,7 +19,7 @@ from typing import (
 )
 
 from more_itertools import first
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel
 from typing_extensions import get_origin
 
 from smartspace.enums import BlockCategory
@@ -50,17 +50,13 @@ from smartspace.models import (
     ValueSourceRef,
     ValueSourceType,
 )
-from smartspace.utils import _issubclass
+from smartspace.utils import _get_type_adapter, _issubclass
 
 B = TypeVar("B", bound="Block")
 S = TypeVar("S")
 T = TypeVar("T")
 R = TypeVar("R")
 P = ParamSpec("P")
-
-
-def _issubclass(cls, base):
-    return inspect.isclass(cls) and issubclass(get_origin(cls) or cls, base)
 
 
 @lru_cache(maxsize=1000)
@@ -87,9 +83,7 @@ def _get_input_interfaces(callable: Callable) -> list["InputInterface"]:
     return [
         InputInterface(
             name=name,
-            json_schema=TypeAdapter(annotation).json_schema()
-            if annotation is not inspect.Parameter.empty
-            else {},
+            json_schema=_get_type_adapter(annotation).json_schema(),
             sticky=any(
                 [
                     metadata.sticky
@@ -115,9 +109,7 @@ def _get_output_interface(name: str, callable: Callable) -> "OutputInterface | N
     if return_type:
         return OutputInterface(
             name=name,
-            json_schema=TypeAdapter(return_type).json_schema()
-            if return_type is not inspect.Parameter.empty
-            else {},
+            json_schema=_get_type_adapter(return_type).json_schema(),
         )
     else:
         return None
@@ -135,9 +127,7 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                 configs.append(
                     ConfigInterface(
                         name=field_name,
-                        json_schema=TypeAdapter(config_type).json_schema()
-                        if config_type is not inspect.Parameter.empty
-                        else {},
+                        json_schema=_get_type_adapter(config_type).json_schema(),
                     )
                 )
 
@@ -189,7 +179,7 @@ class State:
     ):
         self.step_id = step_id
         self.input_ids = input_ids
-        self.default_value_type_adapter = TypeAdapter(default_value.__class__)
+        self.default_value_type_adapter = _get_type_adapter(default_value.__class__)
         self.default_value_json = self.default_value_type_adapter.dump_json(
             default_value
         ).decode()
@@ -358,9 +348,7 @@ class Block:
             setattr(
                 self,
                 config_name,
-                config_definition.value
-                if config_type is inspect.Parameter.empty
-                else TypeAdapter(config_type).validate_python(config_definition.value),
+                _get_type_adapter(config_type).validate_python(config_definition.value),
             )
 
         tool_groups: dict[str, dict[str, Tool]] = {
@@ -452,9 +440,7 @@ class Block:
                 outputs.append(
                     OutputInterface(
                         name=field_name,
-                        json_schema=TypeAdapter(output_type).json_schema()
-                        if output_type is not inspect.Parameter.empty
-                        else {},
+                        json_schema=_get_type_adapter(output_type).json_schema(),
                     )
                 )
             elif _issubclass(field_type, Tool):
@@ -606,10 +592,8 @@ class StepInstance(Generic[B, P, T]):
 
         for input_name, value in kwargs.items():
             input_type = input_types[input_name]
-            step_kwargs[input_name] = (
+            step_kwargs[input_name] = _get_type_adapter(input_type).validate_python(
                 value
-                if input_type is inspect.Parameter.empty
-                else TypeAdapter(input_type).validate_python(value)
             )
 
         result = await self.step._fn(self.parent_block, *tuple(), **kwargs)

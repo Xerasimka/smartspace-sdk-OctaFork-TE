@@ -9,9 +9,10 @@ from pydantic import (
     ConfigDict,
     Field,
     PlainSerializer,
-    TypeAdapter,
     model_serializer,
 )
+
+from smartspace.utils import _get_type_adapter
 
 
 def _nullable_schema_override(
@@ -233,7 +234,9 @@ class FlowIODefinition(BaseModel):
 
     @classmethod
     def from_type(cls, name: str, t: type):
-        return FlowIODefinition(name=name, json_schema=TypeAdapter(t).json_schema())
+        return FlowIODefinition(
+            name=name, json_schema=_get_type_adapter(t).json_schema()
+        )
 
 
 class ValueSourceType(enum.Enum):
