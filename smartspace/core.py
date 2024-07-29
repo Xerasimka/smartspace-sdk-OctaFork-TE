@@ -358,7 +358,9 @@ class Block:
             setattr(
                 self,
                 config_name,
-                TypeAdapter(config_type).validate_python(config_definition.value),
+                config_definition.value
+                if config_type is inspect.Parameter.empty
+                else TypeAdapter(config_type).validate_python(config_definition.value),
             )
 
         tool_groups: dict[str, dict[str, Tool]] = {
@@ -604,7 +606,11 @@ class StepInstance(Generic[B, P, T]):
 
         for input_name, value in kwargs.items():
             input_type = input_types[input_name]
-            step_kwargs[input_name] = TypeAdapter(input_type).validate_python(value)
+            step_kwargs[input_name] = (
+                value
+                if input_type is inspect.Parameter.empty
+                else TypeAdapter(input_type).validate_python(value)
+            )
 
         result = await self.step._fn(self.parent_block, *tuple(), **kwargs)
         if self.output:
