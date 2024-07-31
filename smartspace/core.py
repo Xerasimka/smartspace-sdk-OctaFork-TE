@@ -124,11 +124,25 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                     raise Exception("Outputs must have exactly one type.")
 
                 config_type = field_type.__args__[0]
+                type_adapter = _get_type_adapter(config_type)
+                no_default = "__no_default__"
+                default_value = (
+                    getattr(cls, field_name, no_default)
+                    or type_adapter.get_default_value()
+                )
+                if default_value is no_default:
+                    try:
+                        default_value = type_adapter.dump_python(
+                            config_type(), mode="json"
+                        )
+                    except Exception:
+                        default_value = None
+
                 configs.append(
                     ConfigInterface(
                         name=field_name,
-                        json_schema=_get_type_adapter(config_type).json_schema(),
-                        default_value=getattr(cls, field_name, None),
+                        json_schema=type_adapter.json_schema(),
+                        default_value=default_value,
                     )
                 )
 
