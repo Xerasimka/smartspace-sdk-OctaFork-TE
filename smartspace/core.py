@@ -128,6 +128,7 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                     ConfigInterface(
                         name=field_name,
                         json_schema=_get_type_adapter(config_type).json_schema(),
+                        default_value=getattr(cls, field_name, None),
                     )
                 )
 

@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from typing import Annotated, Any, ClassVar, Tuple
 from uuid import UUID
 
-import pydantic
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -13,15 +12,6 @@ from pydantic import (
 )
 
 from smartspace.utils import _get_type_adapter
-
-
-def _nullable_schema_override(
-    self, schema: Any
-) -> pydantic.json_schema.JsonSchemaValue:
-    return self.generate_inner(schema["schema"])
-
-
-pydantic.json_schema.GenerateJsonSchema.nullable_schema = _nullable_schema_override  # type: ignore
 
 
 class BlockReference(BaseModel):
@@ -122,7 +112,8 @@ class InputInterface(IOCInterface):
 class OutputInterface(IOCInterface): ...
 
 
-class ConfigInterface(IOCInterface): ...
+class ConfigInterface(IOCInterface):
+    default_value: Annotated[Any, Field(alias="defaultValue")]
 
 
 class ToolInterface(BaseModel):
