@@ -2,6 +2,7 @@ from typing import Annotated, Any
 
 from smartspace.core import (
     Block,
+    Config,
     InputConfig,
     Output,
     State,
@@ -105,3 +106,12 @@ class ForEach(Block):
     async def foreach(self, items: list[Any]):
         for item in items:
             self.item.emit(item)
+
+
+@metadata(category=BlockCategory.FUNCTION)
+class Join(Block):
+    separator: Config[str] = ""
+
+    @step(output_name="output")
+    async def join(self, items: list[str]) -> str:
+        return self.separator.join(items)
