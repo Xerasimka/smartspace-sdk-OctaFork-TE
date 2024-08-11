@@ -118,10 +118,21 @@ def _get_output_interface(name: str, callable: Callable) -> "OutputInterface | N
 def _get_configs(cls) -> list["ConfigInterface"]:
     configs: list[ConfigInterface] = []
     for field_name, field_type in cls.__annotations__.items():
-        for m in getattr(field_type, "__metadata__", []):
+        annotations = getattr(field_type, "__metadata__", [])
+
+        for m in annotations:
             if m is ConfigValue:
                 if len(field_type.__args__) != 1:
                     raise Exception("Outputs must have exactly one type.")
+
+                metadata = first(
+                    (
+                        metadata.data
+                        for metadata in annotations
+                        if type(metadata) is Metadata
+                    ),
+                    {},
+                )
 
                 config_type = field_type.__args__[0]
                 type_adapter = _get_type_adapter(config_type)
@@ -138,11 +149,16 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                     except Exception:
                         default_value = None
 
+                json_schema = type_adapter.json_schema()
+                if "description" in metadata:
+                    json_schema["description"] = metadata["description"]
+
                 configs.append(
                     ConfigInterface(
                         name=field_name,
-                        json_schema=type_adapter.json_schema(),
+                        json_schema=json_schema,
                         default_value=default_value,
+                        metadata=metadata,
                     )
                 )
 
