@@ -149,14 +149,10 @@ def _get_configs(cls) -> list["ConfigInterface"]:
                     except Exception:
                         default_value = None
 
-                json_schema = type_adapter.json_schema()
-                if "description" in metadata:
-                    json_schema["description"] = metadata["description"]
-
                 configs.append(
                     ConfigInterface(
                         name=field_name,
-                        json_schema=json_schema,
+                        json_schema=type_adapter.json_schema(),
                         default_value=default_value,
                         metadata=metadata,
                     )
