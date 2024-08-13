@@ -304,8 +304,14 @@ class EmitOutputValueFunction(Protocol):
     ) -> FlowValue: ...
 
 
+class BlockError(BaseModel):
+    message: str
+    data: Any = None
+
+
 class Block:
     metadata: ClassVar[dict] = {}
+    error: Output[BlockError]
 
     def __init__(
         self,
