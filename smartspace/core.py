@@ -463,7 +463,10 @@ class Block:
         states: list[StateInterface] = []
         configs = _get_configs(cls)
 
-        for field_name, field_type in cls.__annotations__.items():
+        for field_name, field_type in {
+            **cls.__annotations__,
+            **Block.__annotations__,
+        }.items():
             o = get_origin(field_type)
             if o is Output:
                 if len(field_type.__args__) != 1:
