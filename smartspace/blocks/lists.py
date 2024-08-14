@@ -109,7 +109,7 @@ class ForEach(Block):
 
 
 @metadata(category=BlockCategory.FUNCTION)
-class Join(Block):
+class JoinStrings(Block):
     separator: Config[str] = ""
 
     @step(output_name="output")
