@@ -14,7 +14,10 @@ from smartspace.core import (
 from smartspace.enums import BlockCategory
 
 
-@metadata(category=BlockCategory.FUNCTION)
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Loops through each item in the items input and sends them to the configured tool. Once all items have been processed, outputs the resulting list",
+)
 class Map(Block):
     class Operation(Tool):
         def run(self, item: Any) -> Any: ...
@@ -65,7 +68,10 @@ class Map(Block):
             self.results.emit(self.results_state)
 
 
-@metadata(category=BlockCategory.FUNCTION)
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Collects data and outputs as a list./Once 'count' items have been received it will output the items in a list",
+)
 class Collect(Block):
     items: Output[list[Any]]
 
@@ -98,7 +104,10 @@ class Count(Block):
         return len(items)
 
 
-@metadata(category=BlockCategory.FUNCTION)
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Loops through a list of items and outputs them one at a time",
+)
 class ForEach(Block):
     item: Output[Any]
 
@@ -108,10 +117,44 @@ class ForEach(Block):
             self.item.emit(item)
 
 
-@metadata(category=BlockCategory.FUNCTION)
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Joins a list of strings using the configured separator and outputs the resulting string",
+)
 class JoinStrings(Block):
     separator: Config[str] = ""
 
     @step(output_name="output")
-    async def join(self, items: list[str]) -> str:
-        return self.separator.join(items)
+    async def join(self, strings: list[str]) -> str:
+        return self.separator.join(strings)
+
+
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Splits a string using the configured separator and outputs a list of the substrings",
+)
+class SplitString(Block):
+    separator: Config[str] = "\n"
+    include_separator: Config[bool] = False
+
+    @step(output_name="output")
+    async def split(self, string: str) -> list[str]:
+        results = string.split(self.separator)
+
+        if self.include_separator:
+            results = [r + self.separator for r in results[:-1]] + [results[-1]]
+
+        return results
+
+
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Slices a list or string using the configured start and end indexes",
+)
+class Slice(Block):
+    start: Config[int] = 0
+    end: Config[int] = 0
+
+    @step(output_name="items")
+    async def slice(self, items: list[Any] | str) -> list[Any] | str:
+        return items[self.start : self.end]

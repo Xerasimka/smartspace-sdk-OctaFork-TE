@@ -27,29 +27,19 @@ class ParseJson(Block):
             Union[str, List[str]],
             Metadata(description="JSON string or list of JSON strings"),
         ],
-    ) -> Any:
-        def fullParse(jsonString: str):
-            try:
-                return json.loads(jsonString)
-            except json.JSONDecodeError:
-                try:
-                    lines = jsonString.split("\n")
-                    json_objects = [json.loads(line) for line in lines]
-                    return json_objects
-                except json.JSONDecodeError as e:
-                    return {"error": str(e)}
-
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         if isinstance(json_string, list):
-            results: List[Any] = [fullParse(item) for item in json_string]
-            return results[0]
+            results: list[Any] = [json.loads(item) for item in json_string]
+            return results
         else:
-            result = fullParse(json_string)
+            result = json.loads(json_string)
             return result
 
 
 @metadata(
     category=BlockCategory.FUNCTION,
     description="Uses JSONPath to extract data from a JSON object or list",
+    obsolete=True,
 )
 class GetJsonField(Block):
     json_field_structure: Config[str]
@@ -68,7 +58,27 @@ class GetJsonField(Block):
         return results
 
 
-@metadata(category=BlockCategory.FUNCTION)
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Uses JSONPath to extract data from a JSON object or list./JSONPath implementation is from https://pypi.org/project/jsonpath-ng/",
+)
+class Get(Block):
+    path: Config[str]
+
+    @step(output_name="result")
+    async def get(self, data: list[Any] | dict[str, Any]) -> Any:
+        jsonpath_expr: JSONPath = parse(self.path)
+        if isinstance(data, list):
+            return [match.value for match in jsonpath_expr.find(data)]
+        else:
+            results = [match.value for match in jsonpath_expr.find(data)]
+            return None if not len(results) else results[0]
+
+
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Merges objects from two lists by matching on the configured key",
+)
 class MergeLists(Block):
     key: Config[str]
 
