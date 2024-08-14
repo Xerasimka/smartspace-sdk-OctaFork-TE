@@ -15,7 +15,7 @@ from smartspace.enums import BlockCategory
     category=BlockCategory.DATA,
     description="Performs a query on a MS SQL Server",
 )
-class SQLServerQuery(Block):
+class SQLServer(Block):
     server: Config[str]
     user: Config[str]
     password: Config[str]
