@@ -52,7 +52,7 @@ class ParseJson(Block):
     description="Uses JSONPath to extract data from a JSON object or list",
 )
 class GetJsonField(Block):
-    json_path: Config[str]
+    json_field_structure: Config[str]
 
     @step(output_name="field")
     async def get(self, json_object: Any) -> Any:
@@ -63,7 +63,7 @@ class GetJsonField(Block):
         ):
             json_object = [json.loads(item.model_dump_json()) for item in json_object]
 
-        jsonpath_expr: JSONPath = parse(self.json_path)
+        jsonpath_expr: JSONPath = parse(self.json_field_structure)
         results: List[Any] = [match.value for match in jsonpath_expr.find(json_object)]
         return results
 
