@@ -1,5 +1,7 @@
 from typing import Annotated, Any
 
+from more_itertools import flatten
+
 from smartspace.core import (
     Block,
     Config,
@@ -158,3 +160,23 @@ class Slice(Block):
     @step(output_name="items")
     async def slice(self, items: list[Any] | str) -> list[Any] | str:
         return items[self.start : self.end]
+
+
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Gets the first item from a list",
+)
+class First(Block):
+    @step(output_name="items")
+    async def first(self, items: list[Any]) -> Any:
+        return items[0]
+
+
+@metadata(
+    category=BlockCategory.FUNCTION,
+    description="Flattens a list of lists into a single list",
+)
+class Flatten(Block):
+    @step(output_name="lists")
+    async def flatten(self, lists: list[list[Any]]) -> list[Any]:
+        return list(flatten(lists))
