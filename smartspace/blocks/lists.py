@@ -167,7 +167,7 @@ class Slice(Block):
     description="Gets the first item from a list",
 )
 class First(Block):
-    @step(output_name="items")
+    @step(output_name="item")
     async def first(self, items: list[Any]) -> Any:
         return items[0]
 
@@ -177,6 +177,6 @@ class First(Block):
     description="Flattens a list of lists into a single list",
 )
 class Flatten(Block):
-    @step(output_name="lists")
+    @step(output_name="list")
     async def flatten(self, lists: list[list[Any]]) -> list[Any]:
         return list(flatten(lists))
