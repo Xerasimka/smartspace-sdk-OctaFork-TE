@@ -632,7 +632,7 @@ class StepInstance(Generic[B, P, T]):
                 value
             )
 
-        result = await self.step._fn(self.parent_block, *tuple(), **kwargs)
+        result = await self.step._fn(self.parent_block, *tuple(), **step_kwargs)
         if self.output:
             self.output.emit(result)
         return result
