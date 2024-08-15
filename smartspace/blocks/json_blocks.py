@@ -60,7 +60,7 @@ class GetJsonField(Block):
 
 @metadata(
     category=BlockCategory.FUNCTION,
-    description="Uses JSONPath to extract data from a JSON object or list./JSONPath implementation is from https://pypi.org/project/jsonpath-ng/",
+    description="Uses JSONPath to extract data from a JSON object or list.\nJSONPath implementation is from https://pypi.org/project/jsonpath-ng/",
 )
 class Get(Block):
     path: Config[str]

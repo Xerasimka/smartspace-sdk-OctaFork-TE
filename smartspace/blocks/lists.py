@@ -70,7 +70,7 @@ class Map(Block):
 
 @metadata(
     category=BlockCategory.FUNCTION,
-    description="Collects data and outputs as a list./Once 'count' items have been received it will output the items in a list",
+    description="Collects data and outputs as a list.\nOnce 'count' items have been received it will output the items in a list",
 )
 class Collect(Block):
     items: Output[list[Any]]
