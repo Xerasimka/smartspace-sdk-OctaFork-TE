@@ -33,6 +33,9 @@ class InputPinInterface(BaseModel):
         str, PinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
+    # if it is required, then it can't have a default
+    # if it is not required, then it will default the default to None when not explicitly set
+    required: bool
     default: Any
 
 
@@ -52,17 +55,7 @@ class PortInterface(BaseModel):
     inputs: dict[str, InputPinInterface]
     outputs: dict[str, OutputPinInterface]
     type: PortType
-
-
-class FunctionInterface(BaseModel):
-    """
-    ports is the list of ports that need data for this function to run
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    metadata: dict = {}
-    ports: list[str]
+    is_function: Annotated[bool, Field(alias="isFunction")]
 
 
 class StateInterface(BaseModel):
@@ -82,9 +75,6 @@ class StateInterface(BaseModel):
 class BlockInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    name: str
-    version: str
     metadata: dict = {}
     ports: dict[str, PortInterface]
-    functions: dict[str, FunctionInterface]
     state: dict[str, StateInterface]
