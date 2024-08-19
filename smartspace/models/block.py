@@ -16,13 +16,22 @@ class PortType(enum.Enum):
     DICTIONARY = "Dictionary"
 
 
+class PinRef(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    port: str
+    pin: str
+
+
 class InputPinInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     metadata: dict = {}
     sticky: bool
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
-    generics: list[str]
+    generics: dict[
+        str, PinRef
+    ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
     default: Any
 
