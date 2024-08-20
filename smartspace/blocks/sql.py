@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Annotated, Any
 
 import pymssql  # type: ignore
 
@@ -16,12 +16,12 @@ from smartspace.enums import BlockCategory
     description="Performs a query on a MS SQL Server",
 )
 class SQLServer(Block):
-    server: Config[str]
-    user: Config[str]
-    password: Config[str]
-    database: Config[str]
-    port: Config[str]
-    query: Config[str]
+    server: Annotated[str, Config()]
+    user: Annotated[str, Config()]
+    password: Annotated[str, Config()]
+    database: Annotated[str, Config()]
+    port: Annotated[str, Config()]
+    query: Annotated[str, Config()]
 
     @step(output_name="results")
     async def search(

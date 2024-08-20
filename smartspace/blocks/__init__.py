@@ -1,7 +1,9 @@
+from typing import cast
+
 from smartspace.core import Block
 
 
-def load(path: str | None = None) -> list[type[Block]]:
+def load(path: str | None = None) -> dict[str, dict[str, type[Block]]]:
     import glob
     import importlib.util
     import sys
@@ -10,7 +12,7 @@ def load(path: str | None = None) -> list[type[Block]]:
     from smartspace.core import Block
     from smartspace.utils import _issubclass
 
-    blocks: list[type[Block]] = []
+    blocks: dict[str, dict[str, type[Block]]] = {}
 
     _path = path or dirname(__file__)
     if isfile(_path):
@@ -41,12 +43,12 @@ def load(path: str | None = None) -> list[type[Block]]:
 
         for name in dir(module):
             item = getattr(module, name)
-            if (
-                _issubclass(item, Block)
-                and item != Block
-                and not any([b == item for b in blocks])
-            ):
-                blocks.append(item)
+            if _issubclass(item, Block) and item != Block:
+                block_type = cast(type[Block], item)
+                if block_type.name not in blocks:
+                    blocks[block_type.name] = {}
+
+                blocks[block_type.name][block_type.version] = block_type
 
     return blocks
 

@@ -44,7 +44,9 @@ class OutputPinInterface(BaseModel):
 
     metadata: dict = {}
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
-    generics: dict[str, dict[str, Any]]
+    generics: dict[
+        str, BlockPinRef
+    ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
 
 

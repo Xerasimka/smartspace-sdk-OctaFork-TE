@@ -5,7 +5,7 @@ from more_itertools import flatten
 from smartspace.core import (
     Block,
     Config,
-    InputConfig,
+    Input,
     Output,
     State,
     Tool,
@@ -33,23 +33,21 @@ class Map(Block):
         State(
             step_id="map",
             input_ids=["items"],
-            default_value=0,
         ),
-    ]
+    ] = 0
 
     results_state: Annotated[
         list[Any],
         State(
             step_id="map",
             input_ids=["items"],
-            default_value=[],
         ),
-    ]
+    ] = []
 
     @step()
     async def map(self, items: list[Any]):
         if len(items) == 0:
-            self.results.emit([])
+            self.results.send([])
             return
 
         self.results_state = [None] * len(items)
@@ -67,7 +65,7 @@ class Map(Block):
         self.count -= 1
 
         if self.count == 0:
-            self.results.emit(self.results_state)
+            self.results.send(self.results_state)
 
 
 @metadata(
@@ -82,24 +80,22 @@ class Collect(Block):
         State(
             step_id="collect",
             input_ids=["count"],
-            default_value=[],
         ),
-    ]
+    ] = []
 
     @step()
     async def collect(
         self,
         item: Any,
-        count: Annotated[int, InputConfig(sticky=True)],
+        count: Annotated[int, Input(sticky=True)],
     ):
         self.items_state.append(item)
 
         if len(self.items_state) == count:
-            self.items.emit(self.items_state)
+            self.items.send(self.items_state)
             self.items_state = []
 
 
-@metadata(category=BlockCategory.FUNCTION)
 class Count(Block):
     @step(output_name="output")
     async def count(self, items: list[Any]) -> int:
@@ -116,7 +112,7 @@ class ForEach(Block):
     @step()
     async def foreach(self, items: list[Any]):
         for item in items:
-            self.item.emit(item)
+            self.item.send(item)
 
 
 @metadata(
@@ -124,7 +120,7 @@ class ForEach(Block):
     description="Joins a list of strings using the configured separator and outputs the resulting string",
 )
 class JoinStrings(Block):
-    separator: Config[str] = ""
+    separator: Annotated[str, Config()] = ""
 
     @step(output_name="output")
     async def join(self, strings: list[str]) -> str:
@@ -136,8 +132,8 @@ class JoinStrings(Block):
     description="Splits a string using the configured separator and outputs a list of the substrings",
 )
 class SplitString(Block):
-    separator: Config[str] = "\n"
-    include_separator: Config[bool] = False
+    separator: Annotated[str, Config()] = "\n"
+    include_separator: Annotated[bool, Config()] = False
 
     @step(output_name="output")
     async def split(self, string: str) -> list[str]:
@@ -154,8 +150,8 @@ class SplitString(Block):
     description="Slices a list or string using the configured start and end indexes",
 )
 class Slice(Block):
-    start: Config[int] = 0
-    end: Config[int] = 0
+    start: Annotated[int, Config()] = 0
+    end: Annotated[int, Config()] = 0
 
     @step(output_name="items")
     async def slice(self, items: list[Any] | str) -> list[Any] | str:
