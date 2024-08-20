@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, model_validator
 
 
-class PinRef(BaseModel):
+class FlowPinRef(BaseModel):
     """
     When referencing block pins, block, port, and pin must be set
     When referencing a constant, only block must be set
@@ -20,8 +20,8 @@ class PinRef(BaseModel):
 class Connection(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    source: PinRef
-    target: PinRef
+    source: FlowPinRef
+    target: FlowPinRef
 
 
 class FlowBlock(BaseModel):

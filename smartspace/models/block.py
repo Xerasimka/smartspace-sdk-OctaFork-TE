@@ -16,7 +16,7 @@ class PortType(enum.Enum):
     DICTIONARY = "Dictionary"
 
 
-class PinRef(BaseModel):
+class BlockPinRef(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     port: str
@@ -30,7 +30,7 @@ class InputPinInterface(BaseModel):
     sticky: bool
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
     generics: dict[
-        str, PinRef
+        str, BlockPinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
     # if it is required, then it can't have a default
@@ -68,7 +68,7 @@ class StateInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     metadata: dict = {}
-    scope_pins: Annotated[list[str], Field(alias="scopePins")]
+    scope: list[BlockPinRef]
     default: Any
 
 
