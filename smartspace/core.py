@@ -977,8 +977,8 @@ class Callback(Generic[B, P]):
 
 
 def metadata(**kwargs):
-    def _inner(cls: type[Block] | Step | Callback):
-        cls.metadata = kwargs
+    def _inner(cls):
+        setattr(cls, "metadata", kwargs)
         return cls
 
     return _inner
