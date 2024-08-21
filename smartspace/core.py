@@ -1260,7 +1260,15 @@ def _set_input_pin_value_on_port(
 class Block(metaclass=MetaBlock):
     error: Annotated[Output[BlockError], Metadata(hidden=True)]
 
-    def __init__(
+    def __init__(self):
+        self._interface = self.interface()
+
+        self._messages: list[BlockMessage] = []
+        self._dynamic_ports: dict[str, list[str]] = {}
+        self._dynamic_inputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
+        self._dynamic_outputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
+
+    def _load(
         self,
         context: BlockContext | None = None,
         state: list[StateValue] | None = None,
@@ -1268,14 +1276,6 @@ class Block(metaclass=MetaBlock):
         dynamic_outputs: list[BlockPinRef] | None = None,
         dynamic_inputs: list[BlockPinRef] | None = None,
     ):
-        self._interface = self.interface()
-
-        self._messages: list[BlockMessage] = []
-
-        self._dynamic_ports: dict[str, list[str]] = {}
-        self._dynamic_inputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
-        self._dynamic_outputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
-
         self._create_all_ports(dynamic_inputs, dynamic_outputs)
 
         if context:
