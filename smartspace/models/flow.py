@@ -1,7 +1,6 @@
-import enum
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FlowPinRef(BaseModel):
@@ -12,7 +11,7 @@ class FlowPinRef(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    block: str
+    node: str
     port: str | None = None
     pin: str | None = None
 
@@ -28,84 +27,38 @@ class FlowBlock(BaseModel):
     name: str
     version: str
 
-    def to_component(self) -> "FlowComponent":
-        return FlowComponent(
-            type=FlowComponentType.BLOCK,
-            name=self.name,
-            version=self.version,
-        )
-
 
 class FlowConstant(BaseModel):
     value: Any
 
-    def to_component(self) -> "FlowComponent":
-        return FlowComponent(
-            type=FlowComponentType.CONSTANT,
-            value=self.value,
-        )
+
+class FlowInput(BaseModel):
+    json_schema: Annotated[dict[str, Any], Field(alias="schema")]
 
 
-class FlowComponentType(enum.Enum):
-    BLOCK = "Block"
-    CONSTANT = "Constant"
-
-
-class FlowComponent(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    type: FlowComponentType
-    name: str | None = None
-    version: str | None = None
-    value: Any = None
-
-    @model_validator(mode="after")
-    def check_values_correct_given_type(self):
-        if self.type == FlowComponentType.BLOCK:
-            if self.value is not None:
-                raise ValueError("'value' must be 'None' when type is Block")
-
-            if not self.name:
-                raise ValueError("'name' must not be 'None' when type is Block")
-
-            if not self.version:
-                raise ValueError("'version' must not be 'None' when type is Block")
-
-        elif self.type == FlowComponentType.CONSTANT:
-            if self.name:
-                raise ValueError("'name' must be 'None' when type is Constant")
-
-            if self.version:
-                raise ValueError("'version' must be 'None' when type is Constant")
-
-        return self
-
-    def as_block(self) -> FlowBlock:
-        if self.type != FlowComponentType.BLOCK:
-            raise ValueError(f"Can not cast to FlowBlock when 'type' is '{self.type}'")
-
-        if not self.name:
-            raise ValueError("Can not cast to FlowBlock when 'name' is 'None'")
-
-        if not self.version:
-            raise ValueError("Can not cast to FlowBlock when 'version' is 'None'")
-
-        return FlowBlock(
-            name=self.name,
-            version=self.version,
-        )
-
-    def as_constant(self) -> FlowConstant:
-        if self.type != FlowComponentType.CONSTANT:
-            raise ValueError(f"Can not cast to FlowBlock when 'type' is '{self.type}'")
-
-        return FlowConstant(
-            value=self.value,
-        )
+class FlowOutput(BaseModel):
+    json_schema: Annotated[dict[str, Any], Field(alias="schema")]
 
 
 class FlowDefinition(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    inputs: dict[str, FlowInput]
+    outputs: dict[str, FlowOutput]
+    constants: dict[str, FlowConstant]
+    blocks: dict[str, FlowBlock]
+
     connections: list[Connection]
-    blocks: dict[str, FlowComponent]
+
+    def get_node(self, node: str) -> FlowBlock | FlowInput | FlowOutput | FlowConstant:
+        result = (
+            self.inputs.get(node, None)
+            or self.outputs.get(node, None)
+            or self.constants.get(node, None)
+            or self.blocks.get(node, None)
+        )
+
+        if result is None:
+            raise KeyError(f"Flow has no nodes with id {node}")
+
+        return result
