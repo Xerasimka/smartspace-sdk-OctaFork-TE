@@ -9,7 +9,9 @@
             "args": [
                 "blocks",
                 "debug",
-                "--poll"
+                "--poll",
+                "--path",
+                ".local"
             ]
         }
     ]
