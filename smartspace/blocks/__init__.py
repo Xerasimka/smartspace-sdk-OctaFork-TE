@@ -21,7 +21,7 @@ def load(path: str | None = None) -> dict[str, dict[str, type[Block]]]:
         file_paths = glob.glob(_path + "/**/*.py", recursive=True)
 
     for file_path in file_paths:
-        if file_path.endswith("__main__.py"):
+        if file_path == __file__ or file_path.endswith("__main__.py"):
             continue
 
         module_path = file_path.removeprefix(_path).replace("/", ".")[:-3]
