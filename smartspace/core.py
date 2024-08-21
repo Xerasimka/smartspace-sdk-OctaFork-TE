@@ -1268,6 +1268,24 @@ class Block(metaclass=MetaBlock):
         self._dynamic_inputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
         self._dynamic_outputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
 
+        for attribute_name in dir(self):
+            attribute = getattr(self, attribute_name)
+
+            if _issubclass(type(attribute), BlockFunction):
+                attribute._block = self
+
+        self._create_all_ports()
+
+    def _run_function(self, name: str):
+        function = getattr(self, name, None)
+        if function is None:
+            raise ValueError(f"Could not find function '{name}'")
+
+        if not isinstance(function, BlockFunction):
+            raise ValueError(f"'{name}' is not a BlockFunction")
+
+        return function._run()
+
     def _load(
         self,
         context: BlockContext | None = None,
@@ -1276,7 +1294,10 @@ class Block(metaclass=MetaBlock):
         dynamic_outputs: list[BlockPinRef] | None = None,
         dynamic_inputs: list[BlockPinRef] | None = None,
     ):
-        self._create_all_ports(dynamic_inputs, dynamic_outputs)
+        if (dynamic_inputs and len(dynamic_inputs)) or (
+            dynamic_outputs and len(dynamic_outputs)
+        ):
+            self._create_all_ports(dynamic_inputs, dynamic_outputs)
 
         if context:
             self._set_context(context)
@@ -1337,12 +1358,6 @@ class Block(metaclass=MetaBlock):
                         (pin_path[0], pin_path[1] if len(pin_path) == 2 else ""),
                     )
                 )
-
-        for attribute_name in dir(self):
-            attribute = getattr(self, attribute_name)
-
-            if type(attribute) is Step or type(attribute) is Callback:
-                attribute._block = self
 
         for port_name, port_interface in self._interface.ports.items():
             if port_interface.type == PortType.SINGLE:
@@ -1801,7 +1816,7 @@ class BlockFunction(Generic[B, P, T]):
 
         return result
 
-    def run(self):
+    def _run(self):
         messages: asyncio.queues.Queue[BlockMessage | BlockControlMessage] = (
             asyncio.queues.Queue()
         )
