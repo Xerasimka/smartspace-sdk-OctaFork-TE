@@ -2,6 +2,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from smartspace.models.block import BlockPinRef
+
 
 class FlowPinRef(BaseModel):
     """
@@ -26,6 +28,7 @@ class Connection(BaseModel):
 class FlowBlock(BaseModel):
     name: str
     version: str
+    dynamic_pins: Annotated[list[BlockPinRef], Field(alias="dynamicPins")]
 
 
 class FlowConstant(BaseModel):
