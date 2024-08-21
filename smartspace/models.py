@@ -237,3 +237,14 @@ class FlowDefinition(BaseModel):
             raise KeyError(f"Flow has no nodes with id {node}")
 
         return result
+
+
+class BlockRunData(BaseModel):
+    name: str
+    version: str
+    function: str
+    context: BlockContext | None
+    state: list[StateValue] | None
+    inputs: list[InputValue] | None
+    dynamic_outputs: list[BlockPinRef] | None
+    dynamic_inputs: list[BlockPinRef] | None

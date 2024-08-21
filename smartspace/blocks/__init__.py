@@ -1,6 +1,22 @@
 from typing import cast
 
-from smartspace.core import Block
+from semantic_version import NpmSpec
+
+from smartspace.core import Block, MetaBlock
+
+
+def find_block(name: str, version: str) -> type[Block]:
+    spec = NpmSpec(version)
+    if name not in MetaBlock._all_block_types:
+        raise KeyError(f"Could not find and versions for block '{name}'")
+
+    versions = {v.semantic_version: v for v in MetaBlock._all_block_types[name]}
+    best_version = spec.select(versions.keys())
+
+    if best_version is None:
+        raise KeyError(f"No version matching '{version}' found for block '{name}'")
+
+    return versions[best_version]
 
 
 def load(path: str | None = None) -> dict[str, dict[str, type[Block]]]:

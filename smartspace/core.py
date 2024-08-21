@@ -1043,14 +1043,26 @@ class BlockError(BaseModel):
 
 
 class MetaBlock(type):
+    _all_block_types: "ClassVar[dict[str, list[type[Block]]]]" = {}
+
     def __new__(cls, name, bases, attrs):
-        return super().__new__(cls, name, bases, attrs)
+        block_type = super().__new__(cls, name, bases, attrs)
+        if name != "Block" and name != "WorkSpaceBlock":
+            block_type.name = block_type.__name__.split("_")[0]
+            if block_type.name not in cls._all_block_types:
+                cls._all_block_types[block_type.name] = []
+
+            cls._all_block_types[block_type.name].append(block_type)
+
+        return block_type
 
     def __init__(self, name, bases, attrs):
         super().__init__(name, bases, attrs)
 
         self.metadata: dict[str, Any] = {}
+        self.name: str
         self._version: str | None = None
+        self._semantic_version: semantic_version.Version | None = None
         self._all_annotations_cache: dict[str, type] | None = None
         self._class_interface: BlockInterface | None = None
         self._input_pin_type_adapters: dict[str, dict[str, TypeAdapter]] = {}
@@ -1183,14 +1195,18 @@ class MetaBlock(type):
         return cls._class_interface
 
     @property
-    def version(cls):
-        version_str = cls._version or ".".join(cls.__name__.split("_")[1:]) or "1.0.0"
-        version = semantic_version.Version.coerce(version_str)
-        return str(version)
+    def semantic_version(cls):
+        if not cls._semantic_version:
+            version_str = (
+                cls._version or ".".join(cls.__name__.split("_")[1:]) or "1.0.0"
+            )
+            cls._semantic_version = semantic_version.Version.coerce(version_str)
+
+        return cls._semantic_version
 
     @property
-    def name(cls):
-        return cls.__name__.split("_")[0]
+    def version(cls):
+        return str(cls.semantic_version)
 
     @property
     def _all_annotations(cls):
@@ -1239,15 +1255,6 @@ def _set_input_pin_value_on_port(
             setattr(port, pin_name, pin_dict)
 
         pin_dict[pin_index] = value
-
-
-class BlockRunData(BaseModel):
-    function: str
-    context: BlockContext | None
-    state: list[StateValue] | None
-    inputs: list[InputValue] | None
-    dynamic_outputs: list[BlockPinRef] | None
-    dynamic_inputs: list[BlockPinRef] | None
 
 
 class Block(metaclass=MetaBlock):
