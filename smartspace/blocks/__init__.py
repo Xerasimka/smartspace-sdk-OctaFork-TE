@@ -39,23 +39,33 @@ def load(path: str | None = None) -> dict[str, dict[str, type[smartspace.core.Bl
     else:
         file_paths = glob.glob(_path + "/**/*.py", recursive=True)
 
+    existing_modules = {
+        m.__file__: m for m in sys.modules.values() if getattr(m, "__file__", None)
+    }
+
     for file_path in file_paths:
         if file_path == __file__ or file_path.endswith("__main__.py"):
             continue
 
-        module_path = file_path.removeprefix(_path).replace("/", ".")[:-3]
-        module_name = module_path.replace("/", ".")
-
-        if path is None:
-            module = importlib.import_module(module_path, package="smartspace.blocks")
+        if file_path in existing_modules:
+            module = existing_modules[file_path]
         else:
-            spec = importlib.util.spec_from_file_location(module_name, file_path)
-            if spec and spec.loader:
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                spec.loader.exec_module(module)
+            module_path = file_path.removeprefix(_path).replace("/", ".")[:-3]
+            module_name = module_path.replace("/", ".")
+
+            if path is None:
+                module = importlib.import_module(
+                    module_path, package="smartspace.blocks"
+                )
             else:
-                module = None
+                spec = importlib.util.spec_from_file_location(module_name, file_path)
+                if spec and spec.loader:
+                    module = importlib.util.module_from_spec(spec)
+                    sys.modules[module_name] = module
+                    existing_modules[file_path] = module
+                    spec.loader.exec_module(module)
+                else:
+                    module = None
 
         if not module:
             continue
