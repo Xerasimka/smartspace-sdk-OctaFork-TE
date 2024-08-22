@@ -1047,7 +1047,11 @@ class MetaBlock(type):
 
     def __new__(cls, name, bases, attrs):
         block_type = super().__new__(cls, name, bases, attrs)
-        if name != "Block" and name != "WorkSpaceBlock":
+        if (
+            name != "Block"
+            and name != "WorkSpaceBlock"
+            and not inspect.isabstract(block_type)
+        ):
             block_type.name = block_type.__name__.split("_")[0]
             if block_type.name not in cls._all_block_types:
                 cls._all_block_types[block_type.name] = []

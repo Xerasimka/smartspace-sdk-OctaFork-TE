@@ -1,16 +1,19 @@
+import inspect
 from typing import cast
 
 from semantic_version import NpmSpec
 
-from smartspace.core import Block, MetaBlock
+import smartspace.core
 
 
-def find_block(name: str, version: str) -> type[Block]:
+def find_block(name: str, version: str) -> type[smartspace.core.Block]:
     spec = NpmSpec(version)
-    if name not in MetaBlock._all_block_types:
+    if name not in smartspace.core.MetaBlock._all_block_types:
         raise KeyError(f"Could not find and versions for block '{name}'")
 
-    versions = {v.semantic_version: v for v in MetaBlock._all_block_types[name]}
+    versions = {
+        v.semantic_version: v for v in smartspace.core.MetaBlock._all_block_types[name]
+    }
     best_version = spec.select(versions.keys())
 
     if best_version is None:
@@ -19,16 +22,16 @@ def find_block(name: str, version: str) -> type[Block]:
     return versions[best_version]
 
 
-def load(path: str | None = None) -> dict[str, dict[str, type[Block]]]:
+def load(path: str | None = None) -> dict[str, dict[str, type[smartspace.core.Block]]]:
     import glob
     import importlib.util
     import sys
     from os.path import dirname, isfile
 
-    from smartspace.core import Block
-    from smartspace.utils import _issubclass
+    import smartspace.core
+    import smartspace.utils
 
-    blocks: dict[str, dict[str, type[Block]]] = {}
+    blocks: dict[str, dict[str, type[smartspace.core.Block]]] = {}
 
     _path = path or dirname(__file__)
     if isfile(_path):
@@ -59,14 +62,16 @@ def load(path: str | None = None) -> dict[str, dict[str, type[Block]]]:
 
         for name in dir(module):
             item = getattr(module, name)
-            if _issubclass(item, Block) and item != Block:
-                block_type = cast(type[Block], item)
+            if (
+                smartspace.utils._issubclass(item, smartspace.core.Block)
+                and item != smartspace.core.Block
+                and item != smartspace.core.WorkSpaceBlock
+                and not inspect.isabstract(item)
+            ):
+                block_type = cast(type[smartspace.core.Block], item)
                 if block_type.name not in blocks:
                     blocks[block_type.name] = {}
 
                 blocks[block_type.name][block_type.version] = block_type
 
     return blocks
-
-
-del Block
