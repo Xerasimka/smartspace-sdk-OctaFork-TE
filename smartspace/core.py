@@ -1073,6 +1073,19 @@ class MetaBlock(type):
         self._output_pin_type_adapters: dict[str, dict[str, TypeAdapter]] = {}
         self._state_type_adapters: dict[str, TypeAdapter] = {}
 
+    def find(self, name: str, version: str) -> "type[Block] | None":
+        spec = semantic_version.NpmSpec(version)
+        if name not in self._all_block_types:
+            return None
+
+        versions = {v.semantic_version: v for v in self._all_block_types[name]}
+        best_version = spec.select(versions.keys())
+
+        if best_version is None:
+            return None
+
+        return versions[best_version]
+
     def _set_input_pin_type_adapter(
         self, port: str, pin: str, type_adapter: TypeAdapter
     ):
