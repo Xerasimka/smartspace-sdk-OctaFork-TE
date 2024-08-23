@@ -1916,7 +1916,7 @@ def metadata(**kwargs):
 
 
 def version(version: str):
-    def inner(cls: MetaBlock):
+    def inner(cls: type[B]) -> type[B]:
         cls._version = version
         return cls
 
