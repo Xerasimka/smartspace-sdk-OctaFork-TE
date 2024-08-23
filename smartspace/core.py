@@ -16,6 +16,7 @@ from typing import (
     ClassVar,
     Concatenate,
     Generic,
+    Mapping,
     NamedTuple,
     ParamSpec,
     TypeVar,
@@ -1042,6 +1043,20 @@ class BlockError(BaseModel):
     data: Any = None
 
 
+class ReadOnlyDict(Mapping):
+    def __init__(self, data):
+        self._data = data
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+
 class MetaBlock(type):
     _all_block_types: "ClassVar[dict[str, list[type[Block]]]]" = {}
 
@@ -1085,6 +1100,10 @@ class MetaBlock(type):
             return None
 
         return versions[best_version]
+
+    @property
+    def all(self) -> "Mapping[str, list[type[Block]]]":
+        return ReadOnlyDict(self._all_block_types)
 
     def _set_input_pin_type_adapter(
         self, port: str, pin: str, type_adapter: TypeAdapter
