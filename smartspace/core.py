@@ -26,7 +26,7 @@ from typing import (
 import semantic_version
 from more_itertools import first
 from pydantic import BaseModel, ConfigDict, TypeAdapter
-from typing_extensions import get_origin
+from pydantic._internal._generics import get_args, get_origin
 
 from smartspace.models import (
     BlockContext,
@@ -76,6 +76,22 @@ class FunctionPins(NamedTuple):
     generics: dict[str, dict[str, Any]]
 
 
+class InputInfo(NamedTuple):
+    type: type
+    is_channel: bool
+
+
+def check_type_is_input_channel(annotation: type) -> InputInfo:
+    if get_origin(annotation) is InputChannel:
+        args = get_args(annotation)
+        if not args or len(args) != 1:
+            raise Exception("Input channels must have exactly one type.")
+
+        return InputInfo(type=args[0], is_channel=True)
+    else:
+        return InputInfo(type=annotation, is_channel=False)
+
+
 def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPins:
     signature = inspect.signature(fn)
     inputs: dict[str, InputPinInterface] = {}
@@ -99,9 +115,9 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
             default = param.default
             required = False
 
-        type_adapter, schema, _generics = _get_json_schema_with_generics(
-            param.annotation
-        )
+        input_type, is_channel = check_type_is_input_channel(param.annotation)
+
+        type_adapter, schema, _generics = _get_json_schema_with_generics(input_type)
         generics.update(_generics)
 
         inputs[name] = InputPinInterface(
@@ -120,6 +136,7 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
                 )
                 for name in _generics.keys()
             },
+            channel=is_channel,
         )
         input_adapters[name] = type_adapter
 
@@ -130,8 +147,19 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
             {},
         )
 
+        if get_origin(signature.return_annotation) == OutputChannel:
+            args = get_args(signature.return_annotation)
+            if not args or len(args) != 1:
+                raise Exception("Outputs must have exactly one type.")
+
+            output_type: type = args[0]
+            is_channel = True
+        else:
+            output_type = signature.return_annotation
+            is_channel = False
+
         output_type_adapter, schema, _generics = _get_json_schema_with_generics(
-            signature.return_annotation
+            output_type
         )
         generics.update(_generics)
 
@@ -147,6 +175,7 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
                     )
                     for name in _generics.keys()
                 },
+                channel=is_channel,
             ),
             output_type_adapter,
         )
@@ -184,9 +213,18 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
             {},
         )
 
-        type_adapter, schema, _generics = _get_json_schema_with_generics(
-            param.annotation
-        )
+        if get_origin(param.annotation) == OutputChannel:
+            args = get_args(param.annotation)
+            if not args or len(args) != 1:
+                raise Exception("Outputs must have exactly one type.")
+
+            output_type: type = args[0]
+            is_channel = True
+        else:
+            output_type = param.annotation
+            is_channel = False
+
+        type_adapter, schema, _generics = _get_json_schema_with_generics(output_type)
         generics.update(_generics)
 
         outputs[name] = OutputPinInterface(
@@ -200,6 +238,7 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
                 )
                 for name in _generics.keys()
             },
+            channel=is_channel,
         )
 
         output_adapters[name] = type_adapter
@@ -210,9 +249,12 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
             (metadata.data for metadata in annotations if type(metadata) is Metadata),
             {},
         )
+        input_type, is_channel = check_type_is_input_channel(
+            signature.return_annotation
+        )
 
         input_type_adapter, schema, _generics = _get_json_schema_with_generics(
-            signature.return_annotation
+            input_type
         )
         generics.update(_generics)
 
@@ -231,6 +273,7 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
                     )
                     for name in _generics.keys()
                 },
+                channel=is_channel,
             ),
             input_type_adapter,
         )
@@ -293,34 +336,43 @@ def _get_input_pin_from_metadata(
     state: State | None = None
     metadata: dict[str, Any] = {}
 
-    for m in getattr(field_type, "__metadata__", []):
-        if isinstance(m, Config):
-            config = m
+    is_input_channel = get_origin(field_type) is InputChannel
+    if is_input_channel:
+        args = get_args(field_type)
+        if not args or len(args) != 1:
+            raise Exception("Input channels must have exactly one type.")
 
-        if isinstance(m, Input):
-            _input = m
+        input_type: type = args[0]
+    else:
+        input_type = field_type
+        for m in getattr(input_type, "__metadata__", []):
+            if isinstance(m, Config):
+                config = m
 
-        if isinstance(m, State):
-            state = m
+            if isinstance(m, Input):
+                _input = m
 
-        if isinstance(m, Metadata):
-            metadata = m.data
+            if isinstance(m, State):
+                state = m
 
-    matches = len([True for i in [config, _input, state] if i is not None])
+            if isinstance(m, Metadata):
+                metadata = m.data
 
-    if matches > 1:
-        raise ValueError(
-            "Fields can only be annotated with one of Config(), Input(), and State()"
-        )
+        matches = len([True for i in [config, _input, state] if i is not None])
 
-    if matches == 0:
-        return (None, None), {}
+        if matches > 1:
+            raise ValueError(
+                "Fields can only be annotated with one of Config(), Input(), and State()"
+            )
 
-    if state:
-        return (None, None), {}
+        if matches == 0:
+            return (None, None), {}
 
-    if config and "config" not in metadata:
-        metadata["config"] = True
+        if state:
+            return (None, None), {}
+
+        if config and "config" not in metadata:
+            metadata["config"] = True
 
     default = None
     required = True
@@ -336,7 +388,7 @@ def _get_input_pin_from_metadata(
             required = False
             default = default_value
 
-    type_adapter, schema, _generics = _get_json_schema_with_generics(field_type)
+    type_adapter, schema, _generics = _get_json_schema_with_generics(input_type)
 
     return (
         (
@@ -354,6 +406,7 @@ def _get_input_pin_from_metadata(
                 },
                 default=default,
                 required=required,
+                channel=is_input_channel,
             ),
             type_adapter,
         ),
@@ -385,7 +438,7 @@ def _get_state_from_metadata(
     if default is no_default:
         raise ValueError("State() attributes must have a default value")
 
-    state_type = field_type.__args__[0]
+    state_type = get_args(field_type)[0]
     block_type._state_type_adapters[field_name] = _get_type_adapter(state_type)
 
     return StateInterface(
@@ -407,7 +460,7 @@ def _map_type_vars(
     def _inner(new_type: type | TypeVar, depth: int) -> type:
         origin = get_origin(new_type)
         if origin == Annotated:
-            args = getattr(new_type, "__args__", None)
+            args = get_args(new_type)
             if not args:
                 return cast(type, new_type)
 
@@ -433,7 +486,7 @@ def _map_type_vars(
             return new_type
 
         new_args = []
-        args = getattr(new_type, "__args__", None)
+        args = get_args(new_type)
         if args:
             for arg in args:
                 if isinstance(arg, TypeVar):
@@ -539,7 +592,7 @@ def _get_pins(
 
     cls_metadata = getattr(cls_annotation, "__metadata__", [])
     if len(cls_metadata):
-        cls = cls_annotation.__args__[0]
+        cls = get_args(cls_annotation)[0]
         metadata = first([a.data for a in cls_metadata if isinstance(a, Metadata)], {})
     else:
         cls = cls_annotation
@@ -553,8 +606,8 @@ def _get_pins(
 
     for base_type in all_bases:
         o = get_origin(base_type)
-        if o is Output:
-            args = getattr(base_type, "__args__", None)
+        if o is Output or o is OutputChannel:
+            args = get_args(base_type)
             if not args or len(args) != 1:
                 raise Exception("Outputs must have exactly one type.")
 
@@ -568,6 +621,7 @@ def _get_pins(
                 generics={
                     name: BlockPinRef(port=name, pin="") for name in _generics.keys()
                 },
+                channel=o is OutputChannel,
             )
 
     if _issubclass(cls_annotation, Tool):
@@ -598,6 +652,7 @@ def _get_pins(
                 type=PinType.SINGLE,
                 required=False,
                 default=generic_schema,
+                channel=False,
             )
 
     (input_pin, input_adapter), _generics = _get_input_pin_from_metadata(
@@ -620,7 +675,7 @@ def _get_pins(
     for field_name, field_annotation in annotations.items():
         field_metadata = getattr(field_annotation, "__metadata__", [])
         if len(field_metadata):
-            field_type = field_annotation.__args__[0]
+            field_type = get_args(field_annotation)[0]
             metadata = first(
                 [a.data for a in field_metadata if isinstance(a, Metadata)], {}
             )
@@ -629,8 +684,8 @@ def _get_pins(
             field_type = field_annotation
 
         o = get_origin(field_type)
-        if o is Output:
-            args = getattr(field_type, "__args__", None)
+        if o is Output or o is OutputChannel:
+            args = get_args(field_type)
             if not args or len(args) != 1:
                 raise Exception("Outputs must have exactly one type.")
 
@@ -650,6 +705,7 @@ def _get_pins(
                     type=PinType.SINGLE,
                     required=False,
                     default=generic_schema,
+                    channel=False,
                 )
 
             outputs[field_name] = OutputPinInterface(
@@ -660,18 +716,24 @@ def _get_pins(
                     name: BlockPinRef(port=port_name, pin=name)
                     for name in _generics.keys()
                 },
+                channel=o is OutputChannel,
             )
 
         elif o is dict:
-            dict_args = getattr(field_type, "__args__", None)
+            dict_args = get_args(field_type)
             if dict_args:
                 item_type: type = dict_args[1]
 
-                if _issubclass(item_type, Output):
+                is_output = _issubclass(item_type, Output)
+                is_output_channel = not is_output and _issubclass(
+                    item_type, OutputChannel
+                )
+
+                if is_output or is_output_channel:
                     if dict_args[0] is not str:
                         raise TypeError("Output dictionaries must have str keys")
 
-                    args = getattr(field_type, "__args__", None)
+                    args = get_args(field_type)
                     if not args or len(args) != 1:
                         raise Exception("Outputs must have exactly one type.")
 
@@ -695,6 +757,7 @@ def _get_pins(
                             type=PinType.SINGLE,
                             required=False,
                             default=generic_schema,
+                            channel=False,
                         )
 
                     outputs[field_name] = OutputPinInterface(
@@ -705,6 +768,7 @@ def _get_pins(
                             name: BlockPinRef(port=port_name, pin=name)
                             for name in _generics.keys()
                         },
+                        channel=is_output_channel,
                     )
                 else:
                     (input_pin, input_adapter), _generics = (
@@ -735,15 +799,21 @@ def _get_pins(
                                 type=PinType.SINGLE,
                                 required=False,
                                 default=generic_schema,
+                                channel=False,
                             )
 
         elif o is list:
-            list_args = getattr(field_type, "__args__", None)
+            list_args = get_args(field_type)
             if list_args:
                 item_type: type = list_args[0]
 
-                if _issubclass(item_type, Output):
-                    args = getattr(field_type, "__args__", None)
+                is_output = _issubclass(item_type, Output)
+                is_output_channel = not is_output and _issubclass(
+                    item_type, OutputChannel
+                )
+
+                if is_output or is_output_channel:
+                    args = get_args(field_type)
                     if not args or len(args) != 1:
                         raise Exception("Outputs must have exactly one type.")
 
@@ -768,6 +838,7 @@ def _get_pins(
                             type=PinType.SINGLE,
                             required=False,
                             default=generic_schema,
+                            channel=False,
                         )
 
                     outputs[field_name] = OutputPinInterface(
@@ -778,6 +849,7 @@ def _get_pins(
                             name: BlockPinRef(port=port_name, pin=name)
                             for name in _generics.keys()
                         },
+                        channel=is_output_channel,
                     )
                 else:
                     (input_pin, input_adapter), _generics = (
@@ -808,6 +880,7 @@ def _get_pins(
                                 type=PinType.SINGLE,
                                 required=False,
                                 default=generic_schema,
+                                channel=False,
                             )
 
         (input_pin, input_adapter), _generics = _get_input_pin_from_metadata(
@@ -834,12 +907,13 @@ def _get_pins(
                     type=PinType.SINGLE,
                     required=False,
                     default=generic_schema,
+                    channel=False,
                 )
 
     for field_name, field_annotation in annotations.items():
         field_metadata = getattr(field_annotation, "__metadata__", [])
         if len(field_metadata):
-            field_type = field_annotation.__args__[0]
+            field_type = get_args(field_annotation)[0]
             metadata = first(
                 [a.data for a in field_metadata if isinstance(a, Metadata)], {}
             )
@@ -850,7 +924,7 @@ def _get_pins(
         origin = get_origin(field_type)
 
         if origin is GenericSetter:
-            type_var = field_type.__args__[0]
+            type_var = get_args(field_type)[0]
             generic_name = type_var.__name__
             if generic_name in inputs:
                 inputs[field_name] = inputs[generic_name]
@@ -895,7 +969,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
     for port_name, port_annotation in annotations.items():
         port_annotations = getattr(port_annotation, "__metadata__", None)
         if port_annotations:
-            field_type = port_annotation.__args__[0]
+            field_type = get_args(port_annotation)[0]
             metadata = first(
                 [a.data for a in port_annotations if isinstance(a, Metadata)], {}
             )
@@ -905,7 +979,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
 
         o = get_origin(field_type)
         if o is dict:
-            dict_args = getattr(field_type, "__args__", None)
+            dict_args = get_args(field_type)
             if dict_args:
                 item_type: type = dict_args[1]
 
@@ -929,7 +1003,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
                     continue
 
         elif o is list:
-            list_args = getattr(field_type, "__args__", None)
+            list_args = get_args(field_type)
             if list_args:
                 item_type: type = list_args[0]
 
@@ -984,6 +1058,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
                     type=PinType.SINGLE,
                     required=False,
                     default=generic_schema,
+                    channel=False,
                 )
             },
             outputs={},
@@ -1017,6 +1092,82 @@ block_messages: contextvars.ContextVar[
 ] = contextvars.ContextVar("block_messages")
 
 
+ChannelT = TypeVar("ChannelT")
+
+
+class ChannelEvent(enum.Enum):
+    DATA = "Data"
+    CLOSE = "Close"
+    ERROR = "Error"
+
+
+class ChannelState(enum.Enum):
+    PENDING = "Pending"
+    OPEN = "Open"
+    CLOSED = "Pending"
+    ERROR = "Error"
+
+
+class InputChannel(BaseModel, Generic[ChannelT]):
+    state: ChannelState
+    event: ChannelEvent | None
+    data: ChannelT | None
+    error: "BlockErrorModel | None"
+
+
+class OutputChannelMessage(BaseModel, Generic[ChannelT]):
+    event: ChannelEvent | None
+    data: ChannelT | None
+
+
+class OutputChannel(Generic[T]):
+    def __init__(self, pin: BlockPinRef):
+        self.pin = pin
+        self.index = 0
+
+    def send(self, value: T):
+        messages = block_messages.get()
+        messages.put_nowait(
+            BlockMessage(
+                outputs=[
+                    OutputValue(
+                        source=self.pin,
+                        value=OutputChannelMessage(
+                            data=value,
+                            event=ChannelEvent.DATA,
+                        ),
+                        index=self.index,
+                    )
+                ],
+                inputs=[],
+                redirects=[],
+                states=[],
+            )
+        )
+        self.index += 1
+
+    def close(self):
+        messages = block_messages.get()
+        messages.put_nowait(
+            BlockMessage(
+                outputs=[
+                    OutputValue(
+                        source=self.pin,
+                        value=OutputChannelMessage(
+                            data=None,
+                            event=ChannelEvent.CLOSE,
+                        ),
+                        index=self.index,
+                    )
+                ],
+                inputs=[],
+                redirects=[],
+                states=[],
+            )
+        )
+        self.index += 1
+
+
 class Output(Generic[T]):
     def __init__(self, pin: BlockPinRef):
         self.pin = pin
@@ -1029,6 +1180,7 @@ class Output(Generic[T]):
                     OutputValue(
                         source=self.pin,
                         value=value,
+                        index=0,
                     )
                 ],
                 inputs=[],
@@ -1038,9 +1190,18 @@ class Output(Generic[T]):
         )
 
 
-class BlockError(BaseModel):
+class BlockError(Exception):
+    def __init__(self, message: str, data: Any = None):
+        self.message = message
+        self.data = data
+
+    def __str__(self):
+        return f"BlockError: {BlockErrorModel(message=self.message, data=self.data)}"
+
+
+class BlockErrorModel(BaseModel):
     message: str
-    data: Any = None
+    data: Any
 
 
 class ReadOnlyDict(Mapping):
@@ -1167,6 +1328,7 @@ class MetaBlock(type):
                                     type=PinType.SINGLE,
                                     required=False,
                                     default=generic_schema,
+                                    channel=False,
                                 )
                             },
                             outputs={},
@@ -1183,7 +1345,7 @@ class MetaBlock(type):
             for port_name, port_annotation in annotations.items():
                 port_metadata = getattr(port_annotation, "__metadata__", [])
                 if len(port_metadata):
-                    field_type = port_annotation.__args__[0]
+                    field_type = get_args(port_annotation)[0]
                     metadata = first(
                         [a.data for a in port_metadata if isinstance(a, Metadata)], {}
                     )
@@ -1194,7 +1356,7 @@ class MetaBlock(type):
                 origin = get_origin(field_type)
 
                 if origin is GenericSetter:
-                    type_var = field_type.__args__[0]
+                    type_var = get_args(field_type)[0]
                     generic_name = type_var.__name__
                     if generic_name in ports:
                         ports[port_name] = ports[generic_name]
@@ -1294,11 +1456,12 @@ def _set_input_pin_value_on_port(
 
 
 class Block(metaclass=MetaBlock):
-    error: Annotated[Output[BlockError], Metadata(hidden=True)]
+    error: Annotated[Output[BlockErrorModel], Metadata(hidden=True)]
 
     def __init__(self):
         self._interface = self.interface()
 
+        self._has_run = False
         self._messages: list[BlockMessage] = []
         self._dynamic_ports: dict[str, list[str]] = {}
         self._dynamic_inputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
@@ -1553,7 +1716,10 @@ class Block(metaclass=MetaBlock):
                     else type_adapter.validate_python(input_interface.default)
                 )
             elif "" in port_interface.outputs:
-                return Output(BlockPinRef(port=port_name, pin=""))
+                if port_interface.outputs[""].channel:
+                    return OutputChannel(BlockPinRef(port=port_name, pin=""))
+                else:
+                    return Output(BlockPinRef(port=port_name, pin=""))
 
         if port_interface.is_function:
             port = getattr(self, port_name)
@@ -1563,12 +1729,12 @@ class Block(metaclass=MetaBlock):
                 port_type = annotation
             else:
                 if annotation == Annotated:
-                    annotation = annotation.__args__[0]
+                    annotation = get_args(annotation)[0]
 
                 if port_interface.type == PortType.LIST:
-                    port_type = annotation.__args__[0]
+                    port_type = get_args(annotation)[0]
                 elif port_interface.type == PortType.DICTIONARY:
-                    port_type = annotation.__args__[1]
+                    port_type = get_args(annotation)[1]
 
             if _issubclass(port_type, Tool):
                 port = port_type(port_name=port_name)
@@ -1616,11 +1782,12 @@ class Block(metaclass=MetaBlock):
 
         for output_name, output_interface in port_interface.outputs.items():
             if output_interface.type == PinType.SINGLE:
-                setattr(
-                    port,
-                    input_name,
-                    Output(BlockPinRef(port=port_name, pin=output_name)),
-                )
+                if output_interface.channel:
+                    output = OutputChannel(BlockPinRef(port=port_name, pin=output_name))
+                else:
+                    output = Output(BlockPinRef(port=port_name, pin=output_name))
+
+                setattr(port, input_name, output)
 
             elif output_interface.type == PinType.LIST:
                 _dynamic_outputs = [
@@ -1628,20 +1795,27 @@ class Block(metaclass=MetaBlock):
                     for _output_name, index in dynamic_outputs
                     if _output_name == output_name
                 ]
-                outputs: list[None | Output] = [None] * (
+                outputs: list[None | Output | OutputChannel] = [None] * (
                     max(_dynamic_outputs, default=-1) + 1
                 )
 
                 for index in _dynamic_outputs:
-                    outputs[index] = Output(
-                        BlockPinRef(port=port_name, pin=output_name)
-                    )
+                    if output_interface.channel:
+                        outputs[index] = OutputChannel(
+                            BlockPinRef(port=port_name, pin=output_name)
+                        )
+                    else:
+                        outputs[index] = Output(
+                            BlockPinRef(port=port_name, pin=output_name)
+                        )
 
                 setattr(port, output_name, outputs)
 
             elif output_interface.type == PinType.DICTIONARY:
-                output_dict: dict[str, Output] = {
-                    index: Output(BlockPinRef(port=port_name, pin=output_name))
+                output_dict: dict[str, Output | OutputChannel] = {
+                    index: OutputChannel(BlockPinRef(port=port_name, pin=output_name))
+                    if output_interface.channel
+                    else Output(BlockPinRef(port=port_name, pin=output_name))
                     for _output_name, index in dynamic_outputs
                     if _output_name == output_name
                 }
@@ -1674,8 +1848,8 @@ class CallbackCall(NamedTuple):
 
 
 class ToolCall(Generic[R]):
-    def __init__(self, parent: "Tool[P, T]", outputs: list[OutputValue]):
-        self.parent = parent
+    def __init__(self, port_name: str, outputs: list[OutputValue]):
+        self.port_name = port_name
         self.outputs = outputs
         self.inputs = []
         self.redirects: list[PinRedirect] = []
@@ -1702,7 +1876,7 @@ class ToolCall(Generic[R]):
         self.redirects.append(
             PinRedirect(
                 source=BlockPinRef(
-                    port=self.parent.port_name,
+                    port=self.port_name,
                     pin="return",
                 ),
                 target=BlockPinRef(
@@ -1759,6 +1933,7 @@ class Tool(Generic[P, T], abc.ABC):
                             pin=name,
                         ),
                         value=value,
+                        index=0,
                     )
                 )
             elif p.kind == p.VAR_POSITIONAL:
@@ -1770,6 +1945,7 @@ class Tool(Generic[P, T], abc.ABC):
                                 pin=f"{name}.{i}",
                             ),
                             value=v,
+                            index=0,
                         )
                     )
             elif p.kind == p.VAR_KEYWORD:
@@ -1782,12 +1958,84 @@ class Tool(Generic[P, T], abc.ABC):
                                 pin=f"{name}.{i}",
                             ),
                             value=v,
+                            index=0,
                         )
                     )
 
         outputs = single_outputs + list_outputs + dictionary_outputs
         return ToolCall(
-            parent=self,
+            port_name=self.port_name,
+            outputs=outputs,
+        )
+
+
+class StreamingTool(Generic[P, T], abc.ABC):
+    metadata: ClassVar[dict] = {}
+
+    def __init__(self, port_name: str):
+        self.port_name = port_name
+        self._index = 0
+
+    @abc.abstractmethod
+    def run(self, *args: P.args, **kwargs: P.kwargs) -> InputChannel[T]: ...
+
+    def call(self, *args: P.args, **kwargs: P.kwargs) -> ToolCall[InputChannel[T]]:
+        s = inspect.signature(self.__class__.run)
+        binding = s.bind(self, *args, **kwargs)
+        binding.apply_defaults()
+
+        single_outputs: list[OutputValue] = []
+        list_outputs: list[OutputValue] = []
+        dictionary_outputs: list[OutputValue] = []
+
+        for name, p in s.parameters.items():
+            if name == "self":
+                continue
+
+            value = binding.arguments[name]
+
+            if p.kind == p.POSITIONAL_OR_KEYWORD or p.kind == p.KEYWORD_ONLY:
+                single_outputs.append(
+                    OutputValue(
+                        source=BlockPinRef(
+                            port=self.port_name,
+                            pin=name,
+                        ),
+                        value=value,
+                        index=self._index,
+                    )
+                )
+            elif p.kind == p.VAR_POSITIONAL:
+                for i, v in enumerate(value):
+                    list_outputs.append(
+                        OutputValue(
+                            source=BlockPinRef(
+                                port=self.port_name,
+                                pin=f"{name}.{i}",
+                            ),
+                            value=v,
+                            index=self._index,
+                        )
+                    )
+            elif p.kind == p.VAR_KEYWORD:
+                value = cast(dict[str, Any], value)
+                for i, v in value.items():
+                    dictionary_outputs.append(
+                        OutputValue(
+                            source=BlockPinRef(
+                                port=self.port_name,
+                                pin=f"{name}.{i}",
+                            ),
+                            value=v,
+                            index=self._index,
+                        )
+                    )
+
+        self._index += 1
+
+        outputs = single_outputs + list_outputs + dictionary_outputs
+        return ToolCall(
+            port_name=self.port_name,
             outputs=outputs,
         )
 
@@ -1838,6 +2086,14 @@ class BlockFunction(Generic[B, P, T]):
         self._pending_inputs: dict[str, dict[str, Any]] = {}
 
     async def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        if self._block._has_run:
+            raise BlockError(
+                message="Block has already run a function. Each instance of a block can only run once",
+                data={"function_name": self.name},
+            )
+
+        self._block._has_run = True
+
         messages: asyncio.queues.Queue[BlockMessage | BlockControlMessage] = (
             asyncio.queues.Queue()
         )
@@ -1853,6 +2109,14 @@ class BlockFunction(Generic[B, P, T]):
         return result
 
     def _run(self):
+        if self._block._has_run:
+            raise BlockError(
+                message="Block has already run a function. Each instance of a block can only run once",
+                data={"function_name": self.name},
+            )
+
+        self._block._has_run = True
+
         messages: asyncio.queues.Queue[BlockMessage | BlockControlMessage] = (
             asyncio.queues.Queue()
         )

@@ -34,10 +34,9 @@ class InputPinInterface(BaseModel):
         str, BlockPinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
-    # if it is required, then it can't have a default
-    # if it is not required, then it will default the default to None when not explicitly set
     required: bool
     default: Any
+    channel: bool
 
 
 class OutputPinInterface(BaseModel):
@@ -49,6 +48,7 @@ class OutputPinInterface(BaseModel):
         str, BlockPinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
+    channel: bool
 
 
 class PortInterface(BaseModel):
@@ -96,6 +96,7 @@ class InputValue(BaseModel):
 class OutputValue(BaseModel):
     source: BlockPinRef
     value: Any
+    index: int
 
 
 class StateValue(BaseModel):
