@@ -2101,9 +2101,11 @@ class BlockFunction(Generic[B, P, T]):
     def __init__(
         self,
         fn: Callable[Concatenate[B, P], Awaitable[T]],
+        output_name: str | None = None,
     ):
         self.name = fn.__name__
         self._fn = fn
+        self._output_name = output_name or ""
         self.metadata: dict = {}
         self._block: B
         self._pending_inputs: dict[str, dict[str, Any]] = {}
@@ -2173,13 +2175,37 @@ class BlockFunction(Generic[B, P, T]):
             elif p.kind == p.VAR_KEYWORD:
                 keyword_inputs.update(values)
 
-        return BlockFunctionCall(
-            messages,
-            self._fn(
+        async def _inner():
+            result = await self._fn(
                 self._block,
                 *tuple(positional_inputs + var_positional_inputs),
                 **keyword_inputs,
-            ),
+            )
+
+            if s.return_annotation is not inspect._empty:
+                messages.put_nowait(
+                    BlockRunMessage(
+                        outputs=[
+                            OutputValue(
+                                source=BlockPinRef(
+                                    port=self.name, pin=self._output_name
+                                ),
+                                value=OutputChannelMessage(
+                                    data=result,
+                                    event=ChannelEvent.DATA,
+                                ),
+                                index=0,
+                            )
+                        ],
+                        inputs=[],
+                        redirects=[],
+                        states=[],
+                    )
+                )
+
+        return BlockFunctionCall(
+            messages,
+            _inner(),
         )
 
 
@@ -2194,6 +2220,12 @@ class Step(BlockFunction[B, P, T]):
 
 
 class Callback(BlockFunction[B, P, None]):
+    def __init__(
+        self,
+        fn: Callable[Concatenate[B, P], None],
+    ):
+        super().__init__(fn, None)
+
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> CallbackCall:
         values = inspect.getcallargs(self._fn, cast(Block, None), *args, **kwargs)
 
