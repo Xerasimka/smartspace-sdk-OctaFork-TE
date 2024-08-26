@@ -33,6 +33,7 @@ from smartspace.models import (
     BlockPinRef,
     BlockRunMessage,
     FlowContext,
+    FunctionInterface,
     InputPinInterface,
     InputValue,
     OutputPinInterface,
@@ -578,6 +579,7 @@ def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
 
 
 class PinsSet(NamedTuple):
+    is_tool: bool
     inputs: dict[str, InputPinInterface]
     outputs: dict[str, OutputPinInterface]
     generics: dict[str, dict[str, Any]]
@@ -587,9 +589,7 @@ def _get_pins(
     cls_annotation: type,
     port_name: str,
     block_type: "type[Block]",
-):
-    # TODO add checking if cls is a tool to this method, similar to checking for Output
-
+) -> PinsSet:
     cls_metadata = getattr(cls_annotation, "__metadata__", [])
     if len(cls_metadata):
         cls = get_args(cls_annotation)[0]
@@ -600,6 +600,7 @@ def _get_pins(
 
     all_bases = _get_all_bases(cls) + [cls, cls_annotation]
 
+    is_tool = False
     inputs: dict[str, InputPinInterface] = {}
     outputs: dict[str, OutputPinInterface] = {}
     generics: dict[str, dict[str, Any]] = {}
@@ -626,6 +627,7 @@ def _get_pins(
 
     if _issubclass(cls_annotation, Tool):
         tool_type = cast(Tool, base_type)
+        is_tool = True
 
         (_input, input_adapter), _outputs, output_adapters, _generics = _get_tool_pins(
             tool_type.run, port_name=port_name
@@ -947,22 +949,24 @@ def _get_pins(
                     ):
                         pin.generics[g] = BlockPinRef(port=port_name, pin=field_name)
 
-    return PinsSet(inputs, outputs, generics)
+    return PinsSet(is_tool, inputs, outputs, generics)
 
 
 class PortsAndState(NamedTuple):
-    ports: dict[str, PortInterface]
+    non_tool_ports: dict[str, PortInterface]
+    tool_ports: dict[str, PortInterface]
     state: dict[str, StateInterface]
 
 
-def _get_ports_and_state(block_type: "type[Block]"):
+def _get_ports_and_state(block_type: "type[Block]") -> PortsAndState:
     annotations = {}
     for base in _get_all_bases(block_type):
         base_annotations = getattr(base, "__annotations__", {})
         annotations.update(base_annotations)
     annotations.update(**block_type.__annotations__)
 
-    ports: dict[str, PortInterface] = {}
+    tool_ports: dict[str, PortInterface] = {}
+    non_tool_ports: dict[str, PortInterface] = {}
     state: dict[str, StateInterface] = {}
     generics: dict[str, dict[str, Any]] = {}
 
@@ -983,7 +987,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
             if dict_args:
                 item_type: type = dict_args[1]
 
-                input_pins, output_pins, _generics = _get_pins(
+                is_tool, input_pins, output_pins, _generics = _get_pins(
                     item_type, port_name=port_name, block_type=block_type
                 )
                 if len(input_pins) or len(output_pins):
@@ -992,13 +996,16 @@ def _get_ports_and_state(block_type: "type[Block]"):
                     if dict_args[0] is not str:
                         raise TypeError("Port dictionaries must have str keys")
 
-                    ports[port_name] = PortInterface(
+                    port_interface = PortInterface(
                         metadata=metadata,
                         inputs=input_pins,
                         outputs=output_pins,
                         type=PortType.DICTIONARY,
-                        is_function=False,
                     )
+                    if is_tool:
+                        tool_ports[port_name] = port_interface
+                    else:
+                        non_tool_ports[port_name] = port_interface
 
                     continue
 
@@ -1007,33 +1014,39 @@ def _get_ports_and_state(block_type: "type[Block]"):
             if list_args:
                 item_type: type = list_args[0]
 
-                input_pins, output_pins, _generics = _get_pins(
+                is_tool, input_pins, output_pins, _generics = _get_pins(
                     item_type, port_name=port_name, block_type=block_type
                 )
                 if len(input_pins) or len(output_pins):
                     generics.update(_generics)
-                    ports[port_name] = PortInterface(
+                    port_interface = PortInterface(
                         metadata=metadata,
                         inputs=input_pins,
                         outputs=output_pins,
                         type=PortType.LIST,
-                        is_function=False,
                     )
+                    if is_tool:
+                        tool_ports[port_name] = port_interface
+                    else:
+                        non_tool_ports[port_name] = port_interface
 
                     continue
 
-        input_pins, output_pins, _generics = _get_pins(
+        is_tool, input_pins, output_pins, _generics = _get_pins(
             port_annotation, port_name=port_name, block_type=block_type
         )
         if len(input_pins) or len(output_pins):
             generics.update(_generics)
-            ports[port_name] = PortInterface(
+            port_interface = PortInterface(
                 metadata=metadata,
                 inputs=input_pins,
                 outputs=output_pins,
                 type=PortType.SINGLE,
-                is_function=False,
             )
+            if is_tool:
+                tool_ports[port_name] = port_interface
+            else:
+                non_tool_ports[port_name] = port_interface
         else:
             s = _get_state_from_metadata(
                 field_type=port_annotation,
@@ -1047,7 +1060,7 @@ def _get_ports_and_state(block_type: "type[Block]"):
         type_adapter = TypeAdapter(dict[str, Any])
         block_type._set_input_pin_type_adapter(generic_name, "", type_adapter)
 
-        ports[generic_name] = PortInterface(
+        non_tool_ports[generic_name] = PortInterface(
             metadata={},
             inputs={
                 "": InputPinInterface(
@@ -1063,10 +1076,9 @@ def _get_ports_and_state(block_type: "type[Block]"):
             },
             outputs={},
             type=PortType.SINGLE,
-            is_function=False,
         )
 
-    return ports, state
+    return PortsAndState(non_tool_ports, tool_ports, state)
 
 
 class Input(BaseModel):
@@ -1286,7 +1298,8 @@ class MetaBlock(type):
 
     def _get_interface(cls):
         if cls._class_interface is None:
-            ports, state = _get_ports_and_state(cls)
+            non_tool_ports, tool_ports, state = _get_ports_and_state(cls)
+            function_interfaces: dict[str, FunctionInterface] = {}
 
             for attribute_name in dir(cls):
                 attribute = getattr(cls, attribute_name)
@@ -1307,11 +1320,12 @@ class MetaBlock(type):
                     for name, adapter in input_adapters.items():
                         cls._set_input_pin_type_adapter(attribute_name, name, adapter)
 
-                    ports[attribute_name] = PortInterface(
+                    function_ports = [attribute_name] + list(non_tool_ports.keys())
+
+                    non_tool_ports[attribute_name] = PortInterface(
                         metadata=attribute.metadata,
                         inputs=inputs,
                         outputs=outputs,
-                        is_function=True,
                         type=PortType.SINGLE,
                     )
 
@@ -1319,7 +1333,9 @@ class MetaBlock(type):
                         type_adapter = TypeAdapter(dict[str, Any])
                         cls._set_input_pin_type_adapter(generic_name, "", type_adapter)
 
-                        ports[generic_name] = PortInterface(
+                        function_ports.append(generic_name)
+
+                        non_tool_ports[generic_name] = PortInterface(
                             metadata={},
                             inputs={
                                 "": InputPinInterface(
@@ -1335,8 +1351,11 @@ class MetaBlock(type):
                             },
                             outputs={},
                             type=PortType.SINGLE,
-                            is_function=False,
                         )
+
+                    function_interfaces[attribute_name] = FunctionInterface(
+                        ports=function_ports
+                    )
 
             annotations = {}
             for base in _get_all_bases(cls):
@@ -1360,19 +1379,19 @@ class MetaBlock(type):
                 if origin is GenericSetter:
                     type_var = get_args(field_type)[0]
                     generic_name = type_var.__name__
-                    if generic_name in ports:
-                        ports[port_name] = ports[generic_name]
-                        del ports[generic_name]
+                    if generic_name in non_tool_ports:
+                        non_tool_ports[port_name] = non_tool_ports[generic_name]
+                        del non_tool_ports[generic_name]
 
-                    ports[port_name].inputs[""].metadata["hidden"] = False
-                    ports[port_name].inputs[""].metadata.update(metadata)
+                    non_tool_ports[port_name].inputs[""].metadata["hidden"] = False
+                    non_tool_ports[port_name].inputs[""].metadata.update(metadata)
 
                     cls._input_pin_type_adapters[port_name][""] = (
                         cls._input_pin_type_adapters[port_name][generic_name]
                     )
                     del cls._input_pin_type_adapters[port_name][generic_name]
 
-                    for port in ports.values():
+                    for port in non_tool_ports.values():
                         for pin in list(port.inputs.values()) + list(
                             port.outputs.values()
                         ):
@@ -1388,8 +1407,9 @@ class MetaBlock(type):
 
             cls._class_interface = BlockInterface(
                 metadata=cls.metadata,
-                ports=ports,
+                ports={**non_tool_ports, **tool_ports},
                 state=state,
+                functions=function_interfaces,
             )
 
         return cls._class_interface
@@ -1621,7 +1641,7 @@ class Block(metaclass=MetaBlock):
                 port_interface = self._interface.ports[port_name]
                 pin_interface = port_interface.inputs[pin_name]
 
-                if port_interface.is_function:
+                if port_name in self._interface.functions:
                     port: BlockFunction = getattr(self, port_name)
                     if pin_name not in port._pending_inputs:
                         port._pending_inputs[pin_name] = {}
@@ -1723,7 +1743,7 @@ class Block(metaclass=MetaBlock):
                 else:
                     return Output(BlockPinRef(port=port_name, pin=""))
 
-        if port_interface.is_function:
+        if port_name in self._interface.functions:
             port = getattr(self, port_name)
         else:
             annotation = self.__class__._all_annotations[port_name]

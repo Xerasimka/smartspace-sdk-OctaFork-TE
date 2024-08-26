@@ -58,7 +58,6 @@ class PortInterface(BaseModel):
     inputs: dict[str, InputPinInterface]
     outputs: dict[str, OutputPinInterface]
     type: PortType
-    is_function: Annotated[bool, Field(alias="isFunction")]
 
 
 class StateInterface(BaseModel):
@@ -75,12 +74,19 @@ class StateInterface(BaseModel):
     default: Any
 
 
+class FunctionInterface(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ports: list[str]
+
+
 class BlockInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     metadata: dict = {}
     ports: dict[str, PortInterface]
     state: dict[str, StateInterface]
+    functions: dict[str, FunctionInterface]
 
 
 class FlowContext(BaseModel):
