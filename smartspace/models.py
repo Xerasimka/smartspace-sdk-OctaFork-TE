@@ -109,13 +109,6 @@ class PinRedirect(BaseModel):
     target: BlockPinRef
 
 
-class BlockMessage(BaseModel):
-    outputs: list[OutputValue]
-    inputs: list[InputValue]
-    redirects: list[PinRedirect]
-    states: list[StateValue]
-
-
 class ThreadMessageResponseSource(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -226,18 +219,15 @@ class FlowDefinition(BaseModel):
 
     connections: list[Connection]
 
-    def get_node(self, node: str) -> FlowBlock | FlowInput | FlowOutput | FlowConstant:
-        result = (
+    def get_node(
+        self, node: str
+    ) -> FlowBlock | FlowInput | FlowOutput | FlowConstant | None:
+        return (
             self.inputs.get(node, None)
             or self.outputs.get(node, None)
             or self.constants.get(node, None)
             or self.blocks.get(node, None)
         )
-
-        if result is None:
-            raise KeyError(f"Flow has no nodes with id {node}")
-
-        return result
 
 
 class BlockRunData(BaseModel):
@@ -249,3 +239,10 @@ class BlockRunData(BaseModel):
     inputs: list[InputValue] | None
     dynamic_outputs: list[BlockPinRef] | None
     dynamic_inputs: list[BlockPinRef] | None
+
+
+class BlockRunMessage(BaseModel):
+    outputs: list[OutputValue]
+    inputs: list[InputValue]
+    redirects: list[PinRedirect]
+    states: list[StateValue]

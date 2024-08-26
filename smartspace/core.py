@@ -31,8 +31,8 @@ from pydantic._internal._generics import get_args, get_origin
 from smartspace.models import (
     BlockContext,
     BlockInterface,
-    BlockMessage,
     BlockPinRef,
+    BlockRunMessage,
     InputPinInterface,
     InputValue,
     OutputPinInterface,
@@ -1088,7 +1088,7 @@ class BlockControlMessage(enum.Enum):
 
 
 block_messages: contextvars.ContextVar[
-    asyncio.queues.Queue[BlockMessage | BlockControlMessage]
+    asyncio.queues.Queue[BlockRunMessage | BlockControlMessage]
 ] = contextvars.ContextVar("block_messages")
 
 
@@ -1128,7 +1128,7 @@ class OutputChannel(Generic[T]):
     def send(self, value: T):
         messages = block_messages.get()
         messages.put_nowait(
-            BlockMessage(
+            BlockRunMessage(
                 outputs=[
                     OutputValue(
                         source=self.pin,
@@ -1149,7 +1149,7 @@ class OutputChannel(Generic[T]):
     def close(self):
         messages = block_messages.get()
         messages.put_nowait(
-            BlockMessage(
+            BlockRunMessage(
                 outputs=[
                     OutputValue(
                         source=self.pin,
@@ -1171,16 +1171,17 @@ class OutputChannel(Generic[T]):
 class Output(Generic[T]):
     def __init__(self, pin: BlockPinRef):
         self.pin = pin
+        self.index = 0
 
     def send(self, value: T):
         messages = block_messages.get()
         messages.put_nowait(
-            BlockMessage(
+            BlockRunMessage(
                 outputs=[
                     OutputValue(
                         source=self.pin,
                         value=value,
-                        index=0,
+                        index=self.index,
                     )
                 ],
                 inputs=[],
@@ -1188,6 +1189,7 @@ class Output(Generic[T]):
                 states=[],
             )
         )
+        self.index += 1
 
 
 class BlockError(Exception):
@@ -1462,7 +1464,7 @@ class Block(metaclass=MetaBlock):
         self._interface = self.interface()
 
         self._has_run = False
-        self._messages: list[BlockMessage] = []
+        self._messages: list[BlockRunMessage] = []
         self._dynamic_ports: dict[str, list[str]] = {}
         self._dynamic_inputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
         self._dynamic_outputs: list[tuple[tuple[str, str], tuple[str, str]]] = []
@@ -1891,7 +1893,7 @@ class ToolCall(Generic[R]):
     def __await__(self):
         messages = block_messages.get()
         messages.put_nowait(
-            BlockMessage(
+            BlockRunMessage(
                 outputs=self.outputs,
                 redirects=self.redirects,
                 inputs=self.inputs,
@@ -2043,7 +2045,7 @@ class StreamingTool(Generic[P, T], abc.ABC):
 class BlockFunctionCall:
     def __init__(
         self,
-        values: asyncio.queues.Queue[BlockMessage | BlockControlMessage],
+        values: asyncio.queues.Queue[BlockRunMessage | BlockControlMessage],
         step: Awaitable,
     ):
         self.values = values
@@ -2068,7 +2070,7 @@ class BlockFunctionCall:
                 raise StopAsyncIteration
             else:
                 raise ValueError(f"Unexpected BlockControlMessage {value}")
-        elif isinstance(value, BlockMessage):
+        elif isinstance(value, BlockRunMessage):
             return value
         else:
             raise ValueError(f"Unexpected BlockMessage {value}")
@@ -2094,7 +2096,7 @@ class BlockFunction(Generic[B, P, T]):
 
         self._block._has_run = True
 
-        messages: asyncio.queues.Queue[BlockMessage | BlockControlMessage] = (
+        messages: asyncio.queues.Queue[BlockRunMessage | BlockControlMessage] = (
             asyncio.queues.Queue()
         )
         block_messages.set(messages)
@@ -2103,7 +2105,7 @@ class BlockFunction(Generic[B, P, T]):
 
         while not messages.empty():
             m = await messages.get()
-            if isinstance(m, BlockMessage):
+            if isinstance(m, BlockRunMessage):
                 self._block._messages.append(m)
 
         return result
@@ -2117,7 +2119,7 @@ class BlockFunction(Generic[B, P, T]):
 
         self._block._has_run = True
 
-        messages: asyncio.queues.Queue[BlockMessage | BlockControlMessage] = (
+        messages: asyncio.queues.Queue[BlockRunMessage | BlockControlMessage] = (
             asyncio.queues.Queue()
         )
         block_messages.set(messages)
