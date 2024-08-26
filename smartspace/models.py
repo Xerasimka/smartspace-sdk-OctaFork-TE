@@ -242,7 +242,7 @@ class BlockRunData(BaseModel):
 
 
 class BlockRunMessage(BaseModel):
-    outputs: list[OutputValue]
-    inputs: list[InputValue]
-    redirects: list[PinRedirect]
-    states: list[StateValue]
+    outputs: list[OutputValue] = []
+    inputs: list[InputValue] = []
+    redirects: list[PinRedirect] = []
+    states: list[StateValue] = []
