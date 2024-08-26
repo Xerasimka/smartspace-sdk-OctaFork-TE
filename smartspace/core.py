@@ -1871,11 +1871,8 @@ class CallbackCall(NamedTuple):
 
 
 class ToolCall(Generic[R]):
-    def __init__(self, port_name: str, outputs: list[OutputValue]):
+    def __init__(self, port_name: str):
         self.port_name = port_name
-        self.outputs = outputs
-        self.inputs = []
-        self.redirects: list[PinRedirect] = []
 
     def then(
         self,
@@ -1885,8 +1882,10 @@ class ToolCall(Generic[R]):
             cast(R, DummyToolValue())
         )
 
+        inputs: list[InputValue] = []
+
         for name, value in other_params.items():
-            self.inputs.append(
+            inputs.append(
                 InputValue(
                     target=BlockPinRef(
                         port=callback_name,
@@ -1896,32 +1895,28 @@ class ToolCall(Generic[R]):
                 )
             )
 
-        self.redirects.append(
-            PinRedirect(
-                source=BlockPinRef(
-                    port=self.port_name,
-                    pin="return",
-                ),
-                target=BlockPinRef(
-                    port=callback_name,
-                    pin=dummy_value_param,
-                ),
+        messages = block_messages.get()
+        messages.put_nowait(
+            BlockRunMessage(
+                outputs=[],
+                redirects=[
+                    PinRedirect(
+                        source=BlockPinRef(
+                            port=self.port_name,
+                            pin="return",
+                        ),
+                        target=BlockPinRef(
+                            port=callback_name,
+                            pin=dummy_value_param,
+                        ),
+                    )
+                ],
+                inputs=inputs,
+                states=[],
             )
         )
 
         return self
-
-    def __await__(self):
-        messages = block_messages.get()
-        messages.put_nowait(
-            BlockRunMessage(
-                outputs=self.outputs,
-                redirects=self.redirects,
-                inputs=self.inputs,
-                states=[],
-            )
-        )
-        yield
 
 
 class Tool(Generic[P, T], abc.ABC):
@@ -1985,11 +1980,17 @@ class Tool(Generic[P, T], abc.ABC):
                         )
                     )
 
-        outputs = single_outputs + list_outputs + dictionary_outputs
-        return ToolCall(
-            port_name=self.port_name,
-            outputs=outputs,
+        messages = block_messages.get()
+        messages.put_nowait(
+            BlockRunMessage(
+                outputs=single_outputs + list_outputs + dictionary_outputs,
+                inputs=[],
+                redirects=[],
+                states=[],
+            )
         )
+
+        return ToolCall(port_name=self.port_name)
 
 
 class StreamingTool(Generic[P, T], abc.ABC):
@@ -2056,11 +2057,17 @@ class StreamingTool(Generic[P, T], abc.ABC):
 
         self._index += 1
 
-        outputs = single_outputs + list_outputs + dictionary_outputs
-        return ToolCall(
-            port_name=self.port_name,
-            outputs=outputs,
+        messages = block_messages.get()
+        messages.put_nowait(
+            BlockRunMessage(
+                outputs=single_outputs + list_outputs + dictionary_outputs,
+                inputs=[],
+                redirects=[],
+                states=[],
+            )
         )
+
+        return ToolCall(port_name=self.port_name)
 
 
 class BlockFunctionCall:
@@ -2190,10 +2197,7 @@ class BlockFunction(Generic[B, P, T]):
                                 source=BlockPinRef(
                                     port=self.name, pin=self._output_name
                                 ),
-                                value=OutputChannelMessage(
-                                    data=result,
-                                    event=ChannelEvent.DATA,
-                                ),
+                                value=result,
                                 index=0,
                             )
                         ],
