@@ -29,10 +29,10 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter
 from pydantic._internal._generics import get_args, get_origin
 
 from smartspace.models import (
-    BlockContext,
     BlockInterface,
     BlockPinRef,
     BlockRunMessage,
+    FlowContext,
     InputPinInterface,
     InputValue,
     OutputPinInterface,
@@ -1489,7 +1489,7 @@ class Block(metaclass=MetaBlock):
 
     def _load(
         self,
-        context: BlockContext | None = None,
+        context: FlowContext | None = None,
         state: list[StateValue] | None = None,
         inputs: list[InputValue] | None = None,
         dynamic_outputs: list[BlockPinRef] | None = None,
@@ -1587,7 +1587,7 @@ class Block(metaclass=MetaBlock):
                 }
                 setattr(self, port_name, port_dict)
 
-    def _set_context(self, context: BlockContext): ...
+    def _set_context(self, context: FlowContext): ...
 
     def _set_state(self, state: list[StateValue]):
         for s in state:
@@ -1830,7 +1830,7 @@ class WorkSpaceBlock(Block):
     workspace: SmartSpaceWorkspace
     message_history: list[ThreadMessage]
 
-    def _set_context(self, context: BlockContext):
+    def _set_context(self, context: FlowContext):
         assert context.workspace is not None, "Workspace is None in a WorkSpaceBlock"
         assert (
             context.message_history is not None

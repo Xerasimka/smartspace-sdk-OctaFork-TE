@@ -83,28 +83,38 @@ class BlockInterface(BaseModel):
     state: dict[str, StateInterface]
 
 
-class BlockContext(BaseModel):
+class FlowContext(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     workspace: "SmartSpaceWorkspace | None"
     message_history: "list[ThreadMessage] | None"
 
 
 class InputValue(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     target: BlockPinRef
     value: Any
 
 
 class OutputValue(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     source: BlockPinRef
     value: Any
     index: int
 
 
 class StateValue(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     state: str
     value: Any
 
 
 class PinRedirect(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     source: BlockPinRef
     target: BlockPinRef
 
@@ -191,6 +201,8 @@ class Connection(BaseModel):
 
 
 class FlowBlock(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     version: str
     dynamic_outputs: Annotated[list[BlockPinRef], Field(alias="dynamicOutputs")]
@@ -198,14 +210,20 @@ class FlowBlock(BaseModel):
 
 
 class FlowConstant(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     value: Any
 
 
 class FlowInput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
 
 
 class FlowOutput(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
 
 
@@ -231,10 +249,12 @@ class FlowDefinition(BaseModel):
 
 
 class BlockRunData(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     name: str
     version: str
     function: str
-    context: BlockContext | None
+    context: FlowContext | None
     state: list[StateValue] | None
     inputs: list[InputValue] | None
     dynamic_outputs: list[BlockPinRef] | None
@@ -242,6 +262,8 @@ class BlockRunData(BaseModel):
 
 
 class BlockRunMessage(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     outputs: list[OutputValue] = []
     inputs: list[InputValue] = []
     redirects: list[PinRedirect] = []
