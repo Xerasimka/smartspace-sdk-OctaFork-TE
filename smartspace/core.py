@@ -1300,6 +1300,7 @@ class MetaBlock(type):
         if cls._class_interface is None:
             non_tool_ports, tool_ports, state = _get_ports_and_state(cls)
             function_interfaces: dict[str, FunctionInterface] = {}
+            function_ports: dict[str, PortInterface] = {}
 
             for attribute_name in dir(cls):
                 attribute = getattr(cls, attribute_name)
@@ -1320,9 +1321,9 @@ class MetaBlock(type):
                     for name, adapter in input_adapters.items():
                         cls._set_input_pin_type_adapter(attribute_name, name, adapter)
 
-                    function_ports = [attribute_name] + list(non_tool_ports.keys())
+                    depends_on_ports = [attribute_name] + list(non_tool_ports.keys())
 
-                    non_tool_ports[attribute_name] = PortInterface(
+                    function_ports[attribute_name] = PortInterface(
                         metadata=attribute.metadata,
                         inputs=inputs,
                         outputs=outputs,
@@ -1333,9 +1334,9 @@ class MetaBlock(type):
                         type_adapter = TypeAdapter(dict[str, Any])
                         cls._set_input_pin_type_adapter(generic_name, "", type_adapter)
 
-                        function_ports.append(generic_name)
+                        depends_on_ports.append(generic_name)
 
-                        non_tool_ports[generic_name] = PortInterface(
+                        function_ports[generic_name] = PortInterface(
                             metadata={},
                             inputs={
                                 "": InputPinInterface(
@@ -1354,7 +1355,7 @@ class MetaBlock(type):
                         )
 
                     function_interfaces[attribute_name] = FunctionInterface(
-                        ports=function_ports
+                        ports=depends_on_ports
                     )
 
             annotations = {}
@@ -1407,7 +1408,7 @@ class MetaBlock(type):
 
             cls._class_interface = BlockInterface(
                 metadata=cls.metadata,
-                ports={**non_tool_ports, **tool_ports},
+                ports={**non_tool_ports, **tool_ports, **function_ports},
                 state=state,
                 functions=function_interfaces,
             )
