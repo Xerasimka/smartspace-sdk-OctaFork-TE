@@ -213,8 +213,8 @@ class FlowBlock(BaseModel):
 
     name: str
     version: str
-    dynamic_outputs: Annotated[list[BlockPinRef], Field(alias="dynamicOutputs")]
-    dynamic_inputs: Annotated[list[BlockPinRef], Field(alias="dynamicInputs")]
+    dynamic_outputs: Annotated[list[BlockPinRef], Field(alias="dynamicOutputs")] = []
+    dynamic_inputs: Annotated[list[BlockPinRef], Field(alias="dynamicInputs")] = []
 
 
 class FlowConstant(BaseModel):
