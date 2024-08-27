@@ -4,6 +4,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from smartspace.utils import _get_type_adapter
+
 
 class PinType(enum.Enum):
     SINGLE = "Single"
@@ -226,11 +228,19 @@ class FlowInput(BaseModel):
 
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
 
+    @classmethod
+    def from_type(cls, t: type) -> "FlowInput":
+        return FlowInput(json_schema=_get_type_adapter(t).json_schema())
+
 
 class FlowOutput(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
+
+    @classmethod
+    def from_type(cls, t: type) -> "FlowOutput":
+        return FlowOutput(json_schema=_get_type_adapter(t).json_schema())
 
 
 class FlowDefinition(BaseModel):
