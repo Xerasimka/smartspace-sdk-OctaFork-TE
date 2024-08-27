@@ -1702,6 +1702,8 @@ class Block(metaclass=MetaBlock):
         port_name: str,
         port_index: str,
     ) -> Any:
+        port_id = port_name if not port_index else f"{port_name}.{port_index}"
+
         port_interface = self._interface.ports[port_name]
         dynamic_inputs: list[tuple[str, str]] = []
         for (_port_name, _port_index), (
@@ -1732,9 +1734,9 @@ class Block(metaclass=MetaBlock):
                 )
             elif "" in port_interface.outputs:
                 if port_interface.outputs[""].channel:
-                    return OutputChannel(BlockPinRef(port=port_name, pin=""))
+                    return OutputChannel(BlockPinRef(port=port_id, pin=""))
                 else:
-                    return Output(BlockPinRef(port=port_name, pin=""))
+                    return Output(BlockPinRef(port=port_id, pin=""))
 
         if port_interface.is_function:
             port = getattr(self, port_name)
@@ -1752,7 +1754,7 @@ class Block(metaclass=MetaBlock):
                     port_type = get_args(annotation)[1]
 
             if _issubclass(port_type, Tool):
-                port = port_type(port_name=port_name)
+                port = port_type(port_name=port_id)
             else:
                 port = port_type()
 
@@ -1798,9 +1800,9 @@ class Block(metaclass=MetaBlock):
         for output_name, output_interface in port_interface.outputs.items():
             if output_interface.type == PinType.SINGLE:
                 if output_interface.channel:
-                    output = OutputChannel(BlockPinRef(port=port_name, pin=output_name))
+                    output = OutputChannel(BlockPinRef(port=port_id, pin=output_name))
                 else:
-                    output = Output(BlockPinRef(port=port_name, pin=output_name))
+                    output = Output(BlockPinRef(port=port_id, pin=output_name))
 
                 setattr(port, output_name, output)
 
@@ -1817,20 +1819,20 @@ class Block(metaclass=MetaBlock):
                 for index in _dynamic_outputs:
                     if output_interface.channel:
                         outputs[index] = OutputChannel(
-                            BlockPinRef(port=port_name, pin=output_name)
+                            BlockPinRef(port=port_id, pin=output_name)
                         )
                     else:
                         outputs[index] = Output(
-                            BlockPinRef(port=port_name, pin=output_name)
+                            BlockPinRef(port=port_id, pin=output_name)
                         )
 
                 setattr(port, output_name, outputs)
 
             elif output_interface.type == PinType.DICTIONARY:
                 output_dict: dict[str, Output | OutputChannel] = {
-                    index: OutputChannel(BlockPinRef(port=port_name, pin=output_name))
+                    index: OutputChannel(BlockPinRef(port=port_id, pin=output_name))
                     if output_interface.channel
-                    else Output(BlockPinRef(port=port_name, pin=output_name))
+                    else Output(BlockPinRef(port=port_id, pin=output_name))
                     for _output_name, index in dynamic_outputs
                     if _output_name == output_name
                 }
@@ -2181,23 +2183,35 @@ class BlockFunction(Generic[B, P, T]):
                 **keyword_inputs,
             )
 
+            outputs: list[OutputValue] = []
+            states: list[StateValue] = []
+
             if s.return_annotation is not inspect._empty:
-                messages.put_nowait(
-                    BlockRunMessage(
-                        outputs=[
-                            OutputValue(
-                                source=BlockPinRef(
-                                    port=self.name, pin=self._output_name
-                                ),
-                                value=result,
-                                index=0,
-                            )
-                        ],
-                        inputs=[],
-                        redirects=[],
-                        states=[],
+                outputs = [
+                    OutputValue(
+                        source=BlockPinRef(port=self.name, pin=self._output_name),
+                        value=result,
+                        index=0,
+                    )
+                ]
+
+            for state_name in self._block._interface.state.keys():
+                state_value = getattr(self._block, state_name, None)
+                states.append(
+                    StateValue(
+                        state=state_name,
+                        value=state_value,
                     )
                 )
+
+            messages.put_nowait(
+                BlockRunMessage(
+                    outputs=outputs,
+                    inputs=[],
+                    redirects=[],
+                    states=states,
+                )
+            )
 
         return BlockFunctionCall(
             messages,
@@ -2218,7 +2232,7 @@ class Step(BlockFunction[B, P, T]):
 class Callback(BlockFunction[B, P, None]):
     def __init__(
         self,
-        fn: Callable[Concatenate[B, P], None],
+        fn: Callable[Concatenate[B, P], Awaitable[None]],
     ):
         super().__init__(fn, None)
 
