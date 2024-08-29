@@ -1319,8 +1319,12 @@ class MetaBlock(type):
                     for name, adapter in input_adapters.items():
                         cls._set_input_pin_type_adapter(attribute_name, name, adapter)
 
+                    metadata = attribute.metadata.copy()
+                    if type(attribute) is Callback:
+                        metadata["callback"] = True
+
                     ports[attribute_name] = PortInterface(
-                        metadata=attribute.metadata,
+                        metadata=metadata,
                         inputs=inputs,
                         outputs=outputs,
                         type=PortType.SINGLE,
