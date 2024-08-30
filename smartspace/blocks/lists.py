@@ -1,12 +1,15 @@
-from typing import Annotated, Any
+from typing import Annotated, Any, Generic, TypeVar
 
 from more_itertools import flatten
 
 from smartspace.core import (
     Block,
+    ChannelEvent,
+    ChannelState,
     Config,
-    Input,
+    InputChannel,
     Output,
+    OutputChannel,
     State,
     Tool,
     callback,
@@ -68,15 +71,18 @@ class Map(Block):
             self.results.send(self.results_state)
 
 
+ItemT = TypeVar("ItemT")
+
+
 @metadata(
     category=BlockCategory.FUNCTION,
-    description="Collects data and outputs as a list.\nOnce 'count' items have been received it will output the items in a list",
+    description="Collects data from a channel and outputs them as a list once the channel closes",
 )
-class Collect(Block):
-    items: Output[list[Any]]
+class Collect(Block, Generic[ItemT]):
+    items: Output[list[ItemT]]
 
     items_state: Annotated[
-        list[Any],
+        list[ItemT],
         State(
             step_id="collect",
             input_ids=["count"],
@@ -86,14 +92,17 @@ class Collect(Block):
     @step()
     async def collect(
         self,
-        item: Any,
-        count: Annotated[int, Input(sticky=True)],
+        item: InputChannel[ItemT],
     ):
-        self.items_state.append(item)
+        if (
+            item.state == ChannelState.OPEN
+            and item.event == ChannelEvent.DATA
+            and item.data
+        ):
+            self.items_state.append(item.data)
 
-        if len(self.items_state) == count:
+        if item.event == ChannelEvent.CLOSE:
             self.items.send(self.items_state)
-            self.items_state = []
 
 
 class Count(Block):
@@ -106,13 +115,15 @@ class Count(Block):
     category=BlockCategory.FUNCTION,
     description="Loops through a list of items and outputs them one at a time",
 )
-class ForEach(Block):
-    item: Output[Any]
+class ForEach(Block, Generic[ItemT]):
+    item: OutputChannel[ItemT]
 
     @step()
-    async def foreach(self, items: list[Any]):
+    async def foreach(self, items: list[ItemT]):
         for item in items:
             self.item.send(item)
+
+        self.item.close()
 
 
 @metadata(

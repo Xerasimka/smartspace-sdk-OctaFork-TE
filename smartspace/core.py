@@ -8,6 +8,7 @@ import inspect
 import json
 import types
 import typing
+import uuid
 from typing import (
     Annotated,
     Any,
@@ -214,16 +215,7 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
             {},
         )
 
-        if get_origin(param.annotation) == OutputChannel:
-            args = get_args(param.annotation)
-            if not args or len(args) != 1:
-                raise Exception("Outputs must have exactly one type.")
-
-            output_type: type = args[0]
-            is_channel = True
-        else:
-            output_type = param.annotation
-            is_channel = False
+        output_type = param.annotation
 
         type_adapter, schema, _generics = _get_json_schema_with_generics(output_type)
         generics.update(_generics)
@@ -239,7 +231,7 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
                 )
                 for name in _generics.keys()
             },
-            channel=is_channel,
+            channel=True,  # Tool outputs should always be channels so multiple tool calls in a function execution have different scopes
         )
 
         output_adapters[name] = type_adapter
@@ -1130,6 +1122,7 @@ class InputChannel(BaseModel, Generic[ChannelT]):
 class OutputChannelMessage(BaseModel, Generic[ChannelT]):
     event: ChannelEvent | None
     data: ChannelT | None
+    channel_id: uuid.UUID | None = None
 
 
 class OutputChannel(Generic[T]):
@@ -1922,6 +1915,8 @@ class Tool(Generic[P, T], abc.ABC):
 
     def __init__(self, port_name: str):
         self.port_name = port_name
+        self._index = 0
+        self._channel_id = uuid.uuid4()
 
     @abc.abstractmethod
     def run(self, *args: P.args, **kwargs: P.kwargs) -> T: ...
@@ -1948,8 +1943,12 @@ class Tool(Generic[P, T], abc.ABC):
                             port=self.port_name,
                             pin=name,
                         ),
-                        value=value,
-                        index=0,
+                        value=OutputChannelMessage(
+                            data=value,
+                            event=ChannelEvent.DATA,
+                            channel_id=self._channel_id,
+                        ),
+                        index=self._index,
                     )
                 )
             elif p.kind == p.VAR_POSITIONAL:
@@ -1960,8 +1959,12 @@ class Tool(Generic[P, T], abc.ABC):
                                 port=self.port_name,
                                 pin=f"{name}.{i}",
                             ),
-                            value=v,
-                            index=0,
+                            value=OutputChannelMessage(
+                                data=v,
+                                event=ChannelEvent.DATA,
+                                channel_id=self._channel_id,
+                            ),
+                            index=self._index,
                         )
                     )
             elif p.kind == p.VAR_KEYWORD:
@@ -1973,8 +1976,12 @@ class Tool(Generic[P, T], abc.ABC):
                                 port=self.port_name,
                                 pin=f"{name}.{i}",
                             ),
-                            value=v,
-                            index=0,
+                            value=OutputChannelMessage(
+                                data=v,
+                                event=ChannelEvent.DATA,
+                                channel_id=self._channel_id,
+                            ),
+                            index=self._index,
                         )
                     )
 
