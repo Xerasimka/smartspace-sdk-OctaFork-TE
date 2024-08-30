@@ -1102,14 +1102,11 @@ ChannelT = TypeVar("ChannelT")
 class ChannelEvent(enum.Enum):
     DATA = "Data"
     CLOSE = "Close"
-    ERROR = "Error"
 
 
 class ChannelState(enum.Enum):
-    PENDING = "Pending"
     OPEN = "Open"
-    CLOSED = "Pending"
-    ERROR = "Error"
+    CLOSED = "Closed"
 
 
 class InputChannel(BaseModel, Generic[ChannelT]):
