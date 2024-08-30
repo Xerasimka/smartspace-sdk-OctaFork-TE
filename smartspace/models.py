@@ -53,7 +53,7 @@ class OutputPinInterface(BaseModel):
         str, BlockPinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
-    channel: bool
+    channel_name: Annotated[str | None, Field(alias="channelName")]
 
 
 class PortInterface(BaseModel):
@@ -295,6 +295,8 @@ ChannelT = TypeVar("ChannelT")
 
 
 class InputChannel(BaseModel, Generic[ChannelT]):
+    model_config = ConfigDict(populate_by_name=True)
+
     state: ChannelState
     event: ChannelEvent | None
     data: ChannelT | None
@@ -302,6 +304,8 @@ class InputChannel(BaseModel, Generic[ChannelT]):
 
 
 class OutputChannelMessage(BaseModel, Generic[ChannelT]):
+    model_config = ConfigDict(populate_by_name=True)
+
     event: ChannelEvent | None
     data: ChannelT | None
-    channel_id: UUID | None = None
+    channel_id: Annotated[UUID | None, Field(alias="channelId")] = None
