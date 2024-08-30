@@ -29,13 +29,17 @@ from more_itertools import first
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from pydantic._internal._generics import get_args, get_origin
 
+from smartspace.enums import ChannelEvent
 from smartspace.models import (
+    BlockErrorModel,
     BlockInterface,
     BlockPinRef,
     BlockRunMessage,
     FlowContext,
+    InputChannel,
     InputPinInterface,
     InputValue,
+    OutputChannelMessage,
     OutputPinInterface,
     OutputValue,
     PinRedirect,
@@ -1096,36 +1100,9 @@ block_messages: contextvars.ContextVar[
 ] = contextvars.ContextVar("block_messages")
 
 
-ChannelT = TypeVar("ChannelT")
-
-
-class ChannelEvent(enum.Enum):
-    DATA = "Data"
-    CLOSE = "Close"
-
-
-class ChannelState(enum.Enum):
-    OPEN = "Open"
-    CLOSED = "Closed"
-
-
-class InputChannel(BaseModel, Generic[ChannelT]):
-    state: ChannelState
-    event: ChannelEvent | None
-    data: ChannelT | None
-    error: "BlockErrorModel | None"
-
-
-class OutputChannelMessage(BaseModel, Generic[ChannelT]):
-    event: ChannelEvent | None
-    data: ChannelT | None
-    channel_id: uuid.UUID | None = None
-
-
 class OutputChannel(Generic[T]):
     def __init__(self, pin: BlockPinRef):
         self.pin = pin
-        self.index = 0
 
     def send(self, value: T):
         messages = block_messages.get()
@@ -1138,7 +1115,6 @@ class OutputChannel(Generic[T]):
                             data=value,
                             event=ChannelEvent.DATA,
                         ),
-                        index=self.index,
                     )
                 ],
                 inputs=[],
@@ -1146,7 +1122,6 @@ class OutputChannel(Generic[T]):
                 states=[],
             )
         )
-        self.index += 1
 
     def close(self):
         messages = block_messages.get()
@@ -1159,7 +1134,6 @@ class OutputChannel(Generic[T]):
                             data=None,
                             event=ChannelEvent.CLOSE,
                         ),
-                        index=self.index,
                     )
                 ],
                 inputs=[],
@@ -1167,13 +1141,11 @@ class OutputChannel(Generic[T]):
                 states=[],
             )
         )
-        self.index += 1
 
 
 class Output(Generic[T]):
     def __init__(self, pin: BlockPinRef):
         self.pin = pin
-        self.index = 0
 
     def send(self, value: T):
         messages = block_messages.get()
@@ -1183,7 +1155,6 @@ class Output(Generic[T]):
                     OutputValue(
                         source=self.pin,
                         value=value,
-                        index=self.index,
                     )
                 ],
                 inputs=[],
@@ -1191,7 +1162,6 @@ class Output(Generic[T]):
                 states=[],
             )
         )
-        self.index += 1
 
 
 class BlockError(Exception):
@@ -1201,11 +1171,6 @@ class BlockError(Exception):
 
     def __str__(self):
         return f"BlockError: {BlockErrorModel(message=self.message, data=self.data)}"
-
-
-class BlockErrorModel(BaseModel):
-    message: str
-    data: Any
 
 
 class ReadOnlyDict(Mapping):
@@ -1945,7 +1910,6 @@ class Tool(Generic[P, T], abc.ABC):
                             event=ChannelEvent.DATA,
                             channel_id=self._channel_id,
                         ),
-                        index=self._index,
                     )
                 )
             elif p.kind == p.VAR_POSITIONAL:
@@ -1961,7 +1925,6 @@ class Tool(Generic[P, T], abc.ABC):
                                 event=ChannelEvent.DATA,
                                 channel_id=self._channel_id,
                             ),
-                            index=self._index,
                         )
                     )
             elif p.kind == p.VAR_KEYWORD:
@@ -1978,7 +1941,6 @@ class Tool(Generic[P, T], abc.ABC):
                                 event=ChannelEvent.DATA,
                                 channel_id=self._channel_id,
                             ),
-                            index=self._index,
                         )
                     )
 
@@ -2028,7 +1990,6 @@ class StreamingTool(Generic[P, T], abc.ABC):
                             pin=name,
                         ),
                         value=value,
-                        index=self._index,
                     )
                 )
             elif p.kind == p.VAR_POSITIONAL:
@@ -2040,7 +2001,6 @@ class StreamingTool(Generic[P, T], abc.ABC):
                                 pin=f"{name}.{i}",
                             ),
                             value=v,
-                            index=self._index,
                         )
                     )
             elif p.kind == p.VAR_KEYWORD:
@@ -2053,7 +2013,6 @@ class StreamingTool(Generic[P, T], abc.ABC):
                                 pin=f"{name}.{i}",
                             ),
                             value=v,
-                            index=self._index,
                         )
                     )
 
@@ -2199,7 +2158,6 @@ class BlockFunction(Generic[B, P, T]):
                     OutputValue(
                         source=BlockPinRef(port=self.name, pin=self._output_name),
                         value=result,
-                        index=0,
                     )
                 ]
 

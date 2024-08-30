@@ -1,9 +1,11 @@
 import enum
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Generic, TypeVar
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from smartspace.enums import ChannelEvent, ChannelState
 from smartspace.utils import _get_type_adapter
 
 
@@ -97,6 +99,11 @@ class FlowContext(BaseModel):
     message_history: "list[ThreadMessage] | None"
 
 
+class BlockErrorModel(BaseModel):
+    message: str
+    data: Any
+
+
 class InputValue(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -109,7 +116,6 @@ class OutputValue(BaseModel):
 
     source: BlockPinRef
     value: Any
-    index: int
 
 
 class StateValue(BaseModel):
@@ -283,3 +289,19 @@ class BlockRunMessage(BaseModel):
     inputs: list[InputValue] = []
     redirects: list[PinRedirect] = []
     states: list[StateValue] = []
+
+
+ChannelT = TypeVar("ChannelT")
+
+
+class InputChannel(BaseModel, Generic[ChannelT]):
+    state: ChannelState
+    event: ChannelEvent | None
+    data: ChannelT | None
+    error: BlockErrorModel | None
+
+
+class OutputChannelMessage(BaseModel, Generic[ChannelT]):
+    event: ChannelEvent | None
+    data: ChannelT | None
+    channel_id: UUID | None = None
