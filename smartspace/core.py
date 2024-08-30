@@ -235,7 +235,7 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
                 )
                 for name in _generics.keys()
             },
-            channel_name=f"{port_name}.{name}",  # Tool outputs should always be channels so multiple tool calls in a function execution have different scopes
+            channel_name=port_name,  # Tool outputs should always be channels so multiple tool calls in a function execution have different scopes
         )
 
         output_adapters[name] = type_adapter
