@@ -1,7 +1,6 @@
 import enum
 from datetime import datetime
 from typing import Annotated, Any, Generic, TypeVar
-from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -53,7 +52,8 @@ class OutputPinInterface(BaseModel):
         str, BlockPinRef
     ]  # Name of the generic, like OutputT, and then a reference to the input on this block that defines the schema
     type: PinType
-    channel_name: Annotated[str | None, Field(alias="channelName")]
+    channel: bool
+    channel_group_id: Annotated[str | None, Field(alias="channelGroupId")]
 
 
 class PortInterface(BaseModel):
@@ -308,4 +308,3 @@ class OutputChannelMessage(BaseModel, Generic[ChannelT]):
 
     event: ChannelEvent | None
     data: ChannelT | None
-    channel_id: Annotated[UUID | None, Field(alias="channelId")] = None

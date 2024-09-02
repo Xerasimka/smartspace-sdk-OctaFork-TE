@@ -8,7 +8,6 @@ import inspect
 import json
 import types
 import typing
-import uuid
 from typing import (
     Annotated,
     Any,
@@ -181,7 +180,8 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
                     )
                     for name in _generics.keys()
                 },
-                channel_name=port_name if is_channel else None,
+                channel=is_channel,
+                channel_group_id=port_name if is_channel else None,
             ),
             output_type_adapter,
         )
@@ -235,7 +235,8 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
                 )
                 for name in _generics.keys()
             },
-            channel_name=port_name,  # Tool outputs should always be channels so multiple tool calls in a function execution have different scopes
+            channel=True,
+            channel_group_id=port_name,  # Tool outputs should always be channels so multiple tool calls in a function execution have different scopes
         )
 
         output_adapters[name] = type_adapter
@@ -618,7 +619,8 @@ def _get_pins(
                 generics={
                     name: BlockPinRef(port=name, pin="") for name in _generics.keys()
                 },
-                channel_name=f"{port_name}" if o is OutputChannel else None,
+                channel=o is OutputChannel,
+                channel_group_id=f"{port_name}" if o is OutputChannel else None,
             )
 
     if _issubclass(cls_annotation, Tool):
@@ -715,7 +717,8 @@ def _get_pins(
                     name: BlockPinRef(port=port_name, pin=name)
                     for name in _generics.keys()
                 },
-                channel_name=f"{port_name}.{name}" if o is OutputChannel else None,
+                channel=o is OutputChannel,
+                channel_group_id=f"{port_name}.{name}" if o is OutputChannel else None,
             )
 
         elif o is dict:
@@ -768,7 +771,8 @@ def _get_pins(
                             name: BlockPinRef(port=port_name, pin=name)
                             for name in _generics.keys()
                         },
-                        channel_name=f"{port_name}.{name}"
+                        channel=is_output_channel,
+                        channel_group_id=f"{port_name}.{name}"
                         if is_output_channel
                         else None,
                     )
@@ -853,7 +857,8 @@ def _get_pins(
                             name: BlockPinRef(port=port_name, pin=name)
                             for name in _generics.keys()
                         },
-                        channel_name=f"{port_name}.{name}"
+                        channel=is_output_channel,
+                        channel_group_id=f"{port_name}.{name}"
                         if is_output_channel
                         else None,
                     )
@@ -1696,7 +1701,7 @@ class Block(metaclass=MetaBlock):
                     else type_adapter.validate_python(input_interface.default)
                 )
             elif "" in port_interface.outputs:
-                if port_interface.outputs[""].channel_name:
+                if port_interface.outputs[""].channel:
                     return OutputChannel(BlockPinRef(port=port_id, pin=""))
                 else:
                     return Output(BlockPinRef(port=port_id, pin=""))
@@ -1762,7 +1767,7 @@ class Block(metaclass=MetaBlock):
 
         for output_name, output_interface in port_interface.outputs.items():
             if output_interface.type == PinType.SINGLE:
-                if output_interface.channel_name:
+                if output_interface.channel:
                     output = OutputChannel(BlockPinRef(port=port_id, pin=output_name))
                 else:
                     output = Output(BlockPinRef(port=port_id, pin=output_name))
@@ -1780,7 +1785,7 @@ class Block(metaclass=MetaBlock):
                 )
 
                 for index in _dynamic_outputs:
-                    if output_interface.channel_name:
+                    if output_interface.channel:
                         outputs[index] = OutputChannel(
                             BlockPinRef(port=port_id, pin=output_name)
                         )
@@ -1794,7 +1799,7 @@ class Block(metaclass=MetaBlock):
             elif output_interface.type == PinType.DICTIONARY:
                 output_dict: dict[str, Output | OutputChannel] = {
                     index: OutputChannel(BlockPinRef(port=port_id, pin=output_name))
-                    if output_interface.channel_name
+                    if output_interface.channel
                     else Output(BlockPinRef(port=port_id, pin=output_name))
                     for _output_name, index in dynamic_outputs
                     if _output_name == output_name
@@ -1882,7 +1887,6 @@ class Tool(Generic[P, T], abc.ABC):
     def __init__(self, port_name: str):
         self.port_name = port_name
         self._index = 0
-        self._channel_id = uuid.uuid4()
 
     @abc.abstractmethod
     def run(self, *args: P.args, **kwargs: P.kwargs) -> T: ...
@@ -1912,7 +1916,6 @@ class Tool(Generic[P, T], abc.ABC):
                         value=OutputChannelMessage(
                             data=value,
                             event=ChannelEvent.DATA,
-                            channel_id=self._channel_id,
                         ),
                     )
                 )
@@ -1927,7 +1930,6 @@ class Tool(Generic[P, T], abc.ABC):
                             value=OutputChannelMessage(
                                 data=v,
                                 event=ChannelEvent.DATA,
-                                channel_id=self._channel_id,
                             ),
                         )
                     )
@@ -1943,7 +1945,6 @@ class Tool(Generic[P, T], abc.ABC):
                             value=OutputChannelMessage(
                                 data=v,
                                 event=ChannelEvent.DATA,
-                                channel_id=self._channel_id,
                             ),
                         )
                     )
