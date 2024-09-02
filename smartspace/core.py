@@ -25,7 +25,7 @@ from typing import (
 
 import semantic_version
 from more_itertools import first
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from pydantic._internal._generics import get_args, get_origin
 
 from smartspace.enums import ChannelEvent
@@ -77,7 +77,7 @@ class FunctionPins(NamedTuple):
     inputs: dict[str, InputPinInterface]
     input_adapters: dict[str, TypeAdapter]
     output: tuple[OutputPinInterface | None, TypeAdapter | None]
-    generics: dict[str, dict[str, Any]]
+    generics: dict[str, TypeAdapter]
 
 
 class InputInfo(NamedTuple):
@@ -100,7 +100,7 @@ def _get_function_pins(fn: Callable, port_name: str | None = None) -> FunctionPi
     signature = inspect.signature(fn)
     inputs: dict[str, InputPinInterface] = {}
     input_adapters: dict[str, TypeAdapter] = {}
-    generics: dict[str, dict[str, Any]] = {}
+    generics: dict[str, TypeAdapter] = {}
 
     for name, param in signature.parameters.items():
         if name == "self":
@@ -200,14 +200,14 @@ class ToolPins(NamedTuple):
     input: tuple[InputPinInterface | None, TypeAdapter | None]
     outputs: dict[str, OutputPinInterface]
     output_adapters: dict[str, TypeAdapter]
-    generics: dict[str, dict[str, Any]]
+    generics: dict[str, TypeAdapter]
 
 
 def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
     signature = inspect.signature(fn)
     outputs: dict[str, OutputPinInterface] = {}
     output_adapters: dict[str, TypeAdapter] = {}
-    generics: dict[str, dict[str, Any]] = {}
+    generics: dict[str, TypeAdapter] = {}
 
     for name, param in signature.parameters.items():
         if name == "self":
@@ -327,9 +327,7 @@ def _get_input_pin_from_metadata(
     port_name: str,
     field_name: str,
     parent: type | None = None,
-) -> tuple[
-    tuple[InputPinInterface | None, TypeAdapter | None], dict[str, dict[str, Any]]
-]:
+) -> tuple[tuple[InputPinInterface | None, TypeAdapter | None], dict[str, TypeAdapter]]:
     config: Config | None = None
     _input: Input | None = None
     state: State | None = None
@@ -454,8 +452,8 @@ def _get_state_from_metadata(
 
 def _map_type_vars(
     original_type: type,
-) -> tuple[type, dict[TypeVar, tuple[type[BaseModel], dict[str, Any]]]]:
-    type_var_defs: dict[TypeVar, tuple[type[BaseModel], dict[str, Any]]] = {}
+) -> tuple[type, dict[TypeVar, TypeAdapter]]:
+    type_var_defs: dict[TypeVar, TypeAdapter] = {}
 
     def _inner(new_type: type | TypeVar, depth: int) -> type:
         origin = get_origin(new_type)
@@ -468,19 +466,13 @@ def _map_type_vars(
             return _inner(new_type, depth + 1)
 
         if isinstance(new_type, TypeVar):
-            schema = TypeAdapter(new_type).json_schema(by_alias=True)
+            adapter = TypeAdapter(new_type)
 
-            class TempTypeVarModel(BaseModel):
-                model_config = ConfigDict(
-                    title=new_type.__name__,
-                    json_schema_extra=schema,
-                )
+            class TempTypeVarModel2(BaseModel):
+                __pydantic_core_schema__ = adapter.core_schema
 
-            type_var_defs[new_type] = (
-                TempTypeVarModel,
-                schema,
-            )
-            return TempTypeVarModel
+            type_var_defs[new_type] = TypeAdapter(new_type)
+            return TempTypeVarModel2
 
         if depth > 10:
             return new_type
@@ -491,20 +483,14 @@ def _map_type_vars(
             for arg in args:
                 if isinstance(arg, TypeVar):
                     if arg not in type_var_defs:
-                        schema = TypeAdapter(arg).json_schema(by_alias=True)
+                        adapter = TypeAdapter(arg)
 
-                        class TempTypeVarModelNested(BaseModel):
-                            model_config = ConfigDict(
-                                title=arg.__name__,
-                                json_schema_extra=schema,
-                            )
+                        class TempTypeVarModel(BaseModel):
+                            __pydantic_core_schema__ = adapter.core_schema
 
-                        type_var_defs[arg] = (
-                            TempTypeVarModelNested,
-                            schema,
-                        )
+                        type_var_defs[arg] = TypeAdapter(arg)
 
-                    new_args.append(type_var_defs[arg][0])
+                    new_args.append(TempTypeVarModel)
                 else:
                     new_args.append(_inner(arg, depth + 1))
 
@@ -534,16 +520,13 @@ def _map_type_vars(
 class JsonSchemaWithGenerics(NamedTuple):
     type_adapter: TypeAdapter
     schema: dict[str, Any]
-    generics: dict[str, dict[str, Any]]
+    generics: dict[str, TypeAdapter]
 
 
 def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
     new_t, type_var_map = _map_type_vars(t)
 
-    generics = {
-        name.__name__: generic_schema
-        for name, (_, generic_schema) in type_var_map.items()
-    }
+    generics = {name.__name__: adapter for name, adapter in type_var_map.items()}
 
     if new_t == inspect._empty:
         new_t = Any
@@ -580,7 +563,7 @@ def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
 class PinsSet(NamedTuple):
     inputs: dict[str, InputPinInterface]
     outputs: dict[str, OutputPinInterface]
-    generics: dict[str, dict[str, Any]]
+    generics: dict[str, TypeAdapter]
 
 
 def _get_pins(
@@ -600,7 +583,7 @@ def _get_pins(
 
     inputs: dict[str, InputPinInterface] = {}
     outputs: dict[str, OutputPinInterface] = {}
-    generics: dict[str, dict[str, Any]] = {}
+    generics: dict[str, TypeAdapter] = {}
 
     for base_type in all_bases:
         o = get_origin(base_type)
@@ -650,7 +633,7 @@ def _get_pins(
                 generics={},
                 type=PinType.SINGLE,
                 required=False,
-                default=generic_schema,
+                default=generic_schema.json_schema(),
                 channel=False,
                 virtual=False,
             )
@@ -704,7 +687,7 @@ def _get_pins(
                     generics={},
                     type=PinType.SINGLE,
                     required=False,
-                    default=generic_schema,
+                    default=generic_schema.json_schema(),
                     channel=False,
                     virtual=False,
                 )
@@ -758,7 +741,7 @@ def _get_pins(
                             generics={},
                             type=PinType.SINGLE,
                             required=False,
-                            default=generic_schema,
+                            default=generic_schema.json_schema(),
                             channel=False,
                             virtual=False,
                         )
@@ -804,7 +787,7 @@ def _get_pins(
                                 generics={},
                                 type=PinType.SINGLE,
                                 required=False,
-                                default=generic_schema,
+                                default=generic_schema.json_schema(),
                                 channel=False,
                                 virtual=False,
                             )
@@ -844,7 +827,7 @@ def _get_pins(
                             generics={},
                             type=PinType.SINGLE,
                             required=False,
-                            default=generic_schema,
+                            default=generic_schema.json_schema(),
                             channel=False,
                             virtual=False,
                         )
@@ -890,7 +873,7 @@ def _get_pins(
                                 generics={},
                                 type=PinType.SINGLE,
                                 required=False,
-                                default=generic_schema,
+                                default=generic_schema.json_schema(),
                                 channel=False,
                                 virtual=False,
                             )
@@ -918,7 +901,7 @@ def _get_pins(
                     generics={},
                     type=PinType.SINGLE,
                     required=False,
-                    default=generic_schema,
+                    default=generic_schema.json_schema(),
                     channel=False,
                     virtual=False,
                 )
@@ -977,7 +960,7 @@ def _get_ports_and_state(block_type: "type[Block]") -> PortsAndState:
 
     ports: dict[str, PortInterface] = {}
     state: dict[str, StateInterface] = {}
-    generics: dict[str, dict[str, Any]] = {}
+    generics: dict[str, TypeAdapter] = {}
 
     for port_name, port_annotation in annotations.items():
         port_annotations = getattr(port_annotation, "__metadata__", None)
@@ -1073,7 +1056,7 @@ def _get_ports_and_state(block_type: "type[Block]") -> PortsAndState:
                     generics={},
                     type=PinType.SINGLE,
                     required=False,
-                    default=generic_schema,
+                    default=generic_schema.json_schema(),
                     channel=False,
                     virtual=False,
                 )
@@ -1309,7 +1292,7 @@ class MetaBlock(type):
                                     generics={},
                                     type=PinType.SINGLE,
                                     required=False,
-                                    default=generic_schema,
+                                    default=generic_schema.json_schema(),
                                     channel=False,
                                     virtual=False,
                                 )
