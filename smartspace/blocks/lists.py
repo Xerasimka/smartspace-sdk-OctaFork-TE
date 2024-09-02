@@ -5,7 +5,6 @@ from more_itertools import flatten
 from smartspace.core import (
     Block,
     ChannelEvent,
-    ChannelState,
     Config,
     InputChannel,
     Output,
@@ -16,7 +15,7 @@ from smartspace.core import (
     metadata,
     step,
 )
-from smartspace.enums import BlockCategory
+from smartspace.enums import BlockCategory, ChannelState
 
 
 @metadata(
