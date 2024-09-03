@@ -544,6 +544,8 @@ def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
                 title = definition["title"]
                 new_definitions[title] = definition
                 json_schema_str = json_schema_str.replace(name, title)
+            else:
+                new_definitions[name] = definition
 
         json_schema = json.loads(json_schema_str)
         json_schema["$defs"] = new_definitions
