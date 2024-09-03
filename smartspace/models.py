@@ -300,7 +300,6 @@ class InputChannel(BaseModel, Generic[ChannelT]):
     state: ChannelState
     event: ChannelEvent | None
     data: ChannelT | None
-    error: BlockErrorModel | None
 
 
 class OutputChannelMessage(BaseModel, Generic[ChannelT]):
