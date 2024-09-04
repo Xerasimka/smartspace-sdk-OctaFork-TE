@@ -1462,8 +1462,10 @@ class Block(metaclass=MetaBlock):
         dynamic_output_pins: list[BlockPinRef] | None = None,
         dynamic_input_pins: list[BlockPinRef] | None = None,
     ):
-        if (dynamic_input_pins and len(dynamic_input_pins)) or (
-            dynamic_output_pins and len(dynamic_output_pins)
+        if (
+            (dynamic_input_pins and len(dynamic_input_pins))
+            or (dynamic_output_pins and len(dynamic_output_pins))
+            or (dynamic_ports and len(dynamic_ports))
         ):
             self._create_all_ports(
                 dynamic_ports, dynamic_input_pins, dynamic_output_pins
