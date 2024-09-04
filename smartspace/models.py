@@ -283,8 +283,9 @@ class BlockRunData(BaseModel):
     context: FlowContext | None
     state: list[StateValue] | None
     inputs: list[InputValue] | None
-    dynamic_outputs: list[BlockPinRef] | None
-    dynamic_inputs: list[BlockPinRef] | None
+    dynamic_ports: list[BlockPinRef] | None
+    dynamic_output_pins: list[BlockPinRef] | None
+    dynamic_input_pins: list[BlockPinRef] | None
 
 
 class BlockRunMessage(BaseModel):

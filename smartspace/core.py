@@ -1459,13 +1459,15 @@ class Block(metaclass=MetaBlock):
         state: list[StateValue] | None = None,
         inputs: list[InputValue] | None = None,
         dynamic_ports: list[str] | None = None,
-        dynamic_outputs: list[BlockPinRef] | None = None,
-        dynamic_inputs: list[BlockPinRef] | None = None,
+        dynamic_output_pins: list[BlockPinRef] | None = None,
+        dynamic_input_pins: list[BlockPinRef] | None = None,
     ):
-        if (dynamic_inputs and len(dynamic_inputs)) or (
-            dynamic_outputs and len(dynamic_outputs)
+        if (dynamic_input_pins and len(dynamic_input_pins)) or (
+            dynamic_output_pins and len(dynamic_output_pins)
         ):
-            self._create_all_ports(dynamic_ports, dynamic_inputs, dynamic_outputs)
+            self._create_all_ports(
+                dynamic_ports, dynamic_input_pins, dynamic_output_pins
+            )
 
         if context:
             self._set_context(context)
