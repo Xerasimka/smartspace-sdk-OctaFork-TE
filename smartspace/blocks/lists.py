@@ -55,7 +55,7 @@ class Map(Block):
         self.results_state = [None] * len(items)
         self.count = len(items)
         for i, item in enumerate(items):
-            self.run.call(item).then(lambda result: self.collect(result, i))
+            await self.run.call(item).then(lambda result: self.collect(result, i))
 
     @callback()
     async def collect(
@@ -84,7 +84,7 @@ class Collect(Block, Generic[ItemT]):
         list[ItemT],
         State(
             step_id="collect",
-            input_ids=["count"],
+            input_ids=["item"],
         ),
     ] = []
 
