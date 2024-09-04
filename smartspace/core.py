@@ -1458,13 +1458,14 @@ class Block(metaclass=MetaBlock):
         context: FlowContext | None = None,
         state: list[StateValue] | None = None,
         inputs: list[InputValue] | None = None,
+        dynamic_ports: list[str] | None = None,
         dynamic_outputs: list[BlockPinRef] | None = None,
         dynamic_inputs: list[BlockPinRef] | None = None,
     ):
         if (dynamic_inputs and len(dynamic_inputs)) or (
             dynamic_outputs and len(dynamic_outputs)
         ):
-            self._create_all_ports(dynamic_inputs, dynamic_outputs)
+            self._create_all_ports(dynamic_ports, dynamic_inputs, dynamic_outputs)
 
         if context:
             self._set_context(context)
@@ -1484,8 +1485,9 @@ class Block(metaclass=MetaBlock):
 
     def _create_all_ports(
         self,
-        dynamic_inputs: list[BlockPinRef] | None = None,
-        dynamic_outputs: list[BlockPinRef] | None = None,
+        dynamic_ports: list[str] | None = None,
+        dynamic_input_pins: list[BlockPinRef] | None = None,
+        dynamic_output_pins: list[BlockPinRef] | None = None,
     ):
         for port_name, port_interface in self._interface.ports.items():
             if (
@@ -1494,14 +1496,22 @@ class Block(metaclass=MetaBlock):
             ):
                 self._dynamic_ports[port_name] = []
 
-        if dynamic_inputs:
-            for i in dynamic_inputs:
+        if dynamic_ports:
+            for i in dynamic_ports:
+                port_path = i.split(".")
+                port_name = port_path[0]
+                port_index = port_path[1] if len(port_path) == 2 else ""
+
+                if port_index:
+                    self._dynamic_ports[port_name].append(port_index)
+
+        if dynamic_input_pins:
+            for i in dynamic_input_pins:
                 port_path = i.port.split(".")
                 pin_path = i.port.split(".")
 
                 port_name = port_path[0]
                 port_index = port_path[1] if len(port_path) == 2 else ""
-                self._dynamic_ports[port_name].append(port_index)
 
                 self._dynamic_inputs.append(
                     (
@@ -1510,14 +1520,13 @@ class Block(metaclass=MetaBlock):
                     )
                 )
 
-        if dynamic_outputs:
-            for i in dynamic_outputs:
+        if dynamic_output_pins:
+            for i in dynamic_output_pins:
                 port_path = i.port.split(".")
                 pin_path = i.port.split(".")
 
                 port_name = port_path[0]
                 port_index = port_path[1] if len(port_path) == 2 else ""
-                self._dynamic_ports[port_name].append(port_index)
 
                 self._dynamic_outputs.append(
                     (
@@ -1959,80 +1968,6 @@ class Tool(Generic[P, T], abc.ABC):
         all_outputs = single_outputs + list_outputs + dictionary_outputs
 
         return ToolCall(port_name=self.port_name, outputs=all_outputs)
-
-
-class StreamingTool(Generic[P, T], abc.ABC):
-    metadata: ClassVar[dict] = {}
-
-    def __init__(self, port_name: str):
-        self.port_name = port_name
-        self._index = 0
-
-    @abc.abstractmethod
-    def run(self, *args: P.args, **kwargs: P.kwargs) -> InputChannel[T]: ...
-
-    def call(self, *args: P.args, **kwargs: P.kwargs) -> ToolCall[InputChannel[T]]:
-        s = inspect.signature(self.__class__.run)
-        binding = s.bind(self, *args, **kwargs)
-        binding.apply_defaults()
-
-        single_outputs: list[OutputValue] = []
-        list_outputs: list[OutputValue] = []
-        dictionary_outputs: list[OutputValue] = []
-
-        for name, p in s.parameters.items():
-            if name == "self":
-                continue
-
-            value = binding.arguments[name]
-
-            if p.kind == p.POSITIONAL_OR_KEYWORD or p.kind == p.KEYWORD_ONLY:
-                single_outputs.append(
-                    OutputValue(
-                        source=BlockPinRef(
-                            port=self.port_name,
-                            pin=name,
-                        ),
-                        value=value,
-                    )
-                )
-            elif p.kind == p.VAR_POSITIONAL:
-                for i, v in enumerate(value):
-                    list_outputs.append(
-                        OutputValue(
-                            source=BlockPinRef(
-                                port=self.port_name,
-                                pin=f"{name}.{i}",
-                            ),
-                            value=v,
-                        )
-                    )
-            elif p.kind == p.VAR_KEYWORD:
-                value = cast(dict[str, Any], value)
-                for i, v in value.items():
-                    dictionary_outputs.append(
-                        OutputValue(
-                            source=BlockPinRef(
-                                port=self.port_name,
-                                pin=f"{name}.{i}",
-                            ),
-                            value=v,
-                        )
-                    )
-
-        self._index += 1
-
-        messages = block_messages.get()
-        messages.put_nowait(
-            BlockRunMessage(
-                outputs=single_outputs + list_outputs + dictionary_outputs,
-                inputs=[],
-                redirects=[],
-                states=[],
-            )
-        )
-
-        return ToolCall(port_name=self.port_name)
 
 
 class BlockFunctionCall:

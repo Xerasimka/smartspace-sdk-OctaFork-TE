@@ -218,8 +218,13 @@ class FlowBlock(BaseModel):
 
     name: str
     version: str
-    dynamic_outputs: Annotated[list[BlockPinRef], Field(alias="dynamicOutputs")] = []
-    dynamic_inputs: Annotated[list[BlockPinRef], Field(alias="dynamicInputs")] = []
+    dynamic_ports: Annotated[list[str], Field(alias="dynamicPorts")] = []
+    dynamic_output_pins: Annotated[
+        list[BlockPinRef], Field(alias="dynamicOutputPins")
+    ] = []
+    dynamic_input_pins: Annotated[
+        list[BlockPinRef], Field(alias="dynamicInputPins")
+    ] = []
 
 
 class FlowConstant(BaseModel):
