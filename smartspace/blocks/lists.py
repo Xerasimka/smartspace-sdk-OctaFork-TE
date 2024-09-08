@@ -17,18 +17,21 @@ from smartspace.core import (
 )
 from smartspace.enums import BlockCategory, ChannelState
 
+ItemT = TypeVar("ItemT")
+ResultT = TypeVar("ResultT")
+
 
 @metadata(
     category=BlockCategory.FUNCTION,
     description="Loops through each item in the items input and sends them to the configured tool. Once all items have been processed, outputs the resulting list",
 )
-class Map(Block):
+class Map(Block, Generic[ItemT, ResultT]):
     class Operation(Tool):
-        def run(self, item: Any) -> Any: ...
+        def run(self, item: ItemT) -> ResultT: ...
 
     run: Operation
 
-    results: Output[list[Any]]
+    results: Output[list[ResultT]]
 
     count: Annotated[
         int,
@@ -47,7 +50,7 @@ class Map(Block):
     ] = []
 
     @step()
-    async def map(self, items: list[Any]):
+    async def map(self, items: list[ItemT]):
         if len(items) == 0:
             self.results.send([])
             return
@@ -60,7 +63,7 @@ class Map(Block):
     @callback()
     async def collect(
         self,
-        result: Any,
+        result: ResultT,
         index: int,
     ):
         self.results_state[index] = result
@@ -68,9 +71,6 @@ class Map(Block):
 
         if self.count == 0:
             self.results.send(self.results_state)
-
-
-ItemT = TypeVar("ItemT")
 
 
 @metadata(

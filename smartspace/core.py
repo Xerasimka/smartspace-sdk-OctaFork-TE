@@ -25,7 +25,7 @@ from typing import (
 
 import semantic_version
 from more_itertools import first
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from pydantic._internal._generics import get_args, get_origin
 
 from smartspace.enums import ChannelEvent
@@ -469,7 +469,9 @@ def _map_type_vars(
             adapter = TypeAdapter(new_type)
 
             class TempTypeVarModel2(BaseModel):
-                __pydantic_core_schema__ = adapter.core_schema
+                model_config = ConfigDict(
+                    title=new_type.__name__, json_schema_extra=adapter.json_schema()
+                )
 
             type_var_defs[new_type] = TypeAdapter(new_type)
             return TempTypeVarModel2
@@ -486,7 +488,10 @@ def _map_type_vars(
                         adapter = TypeAdapter(arg)
 
                         class TempTypeVarModel(BaseModel):
-                            __pydantic_core_schema__ = adapter.core_schema
+                            model_config = ConfigDict(
+                                title=arg.__name__,
+                                json_schema_extra=adapter.json_schema(),
+                            )
 
                         type_var_defs[arg] = TypeAdapter(arg)
 
