@@ -2,17 +2,20 @@ import smartspace.core
 import smartspace.utils
 
 
-def load(path: str | None = None) -> "smartspace.core.BlockSet":
+def load(
+    path: str | None = None,
+    block_set: smartspace.core.BlockSet | None = None,
+) -> smartspace.core.BlockSet:
     import importlib.util
     import pathlib
     import sys
     from os.path import dirname, isfile
 
-    blocks = smartspace.core.BlockSet()
+    block_set = block_set or smartspace.core.BlockSet()
     if not path:
-        blocks.add(smartspace.core.User)
+        block_set.add(smartspace.core.User)
 
-    smartspace.core.block_scope.set(blocks)
+    smartspace.core.block_scope.set(block_set)
 
     _path = path or dirname(__file__)
     if isfile(_path):
@@ -46,4 +49,4 @@ def load(path: str | None = None) -> "smartspace.core.BlockSet":
                     existing_modules[file_path] = module
                     spec.loader.exec_module(module)
 
-    return blocks
+    return block_set
