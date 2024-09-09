@@ -1338,10 +1338,10 @@ class MetaBlock(type):
                     ports[port_name].inputs[""].metadata["hidden"] = False
                     ports[port_name].inputs[""].metadata.update(metadata)
 
-                    cls._input_pin_type_adapters[port_name][""] = (
-                        cls._input_pin_type_adapters[port_name][generic_name]
-                    )
-                    del cls._input_pin_type_adapters[port_name][generic_name]
+                    cls._input_pin_type_adapters[port_name] = {
+                        "": cls._input_pin_type_adapters[generic_name][""]
+                    }
+                    del cls._input_pin_type_adapters[generic_name]
 
                     for port in ports.values():
                         for pin in list(port.inputs.values()) + list(
