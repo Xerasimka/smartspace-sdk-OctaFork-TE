@@ -1188,24 +1188,24 @@ class ReadOnlyDict(Mapping):
 
 class BlockSet:
     def __init__(self):
-        self._blocks: dict[str, list[type[Block]]] = {}
+        self._blocks: dict[str, dict[str, type[Block]]] = {}
 
     @property
-    def all(self) -> "Mapping[str, list[type[Block]]]":
+    def all(self) -> "Mapping[str, dict[str, type[Block]]]":
         return ReadOnlyDict(self._blocks)
 
     def add(self, block: type["Block"]):
         if block.name not in self._blocks:
-            self._blocks[block.name] = []
+            self._blocks[block.name] = {}
 
-        self._blocks[block.name].append(block)
+        self._blocks[block.name][block.version] = block
 
     def find(self, name: str, version: str):
         spec = semantic_version.NpmSpec(version)
         if name not in self._blocks:
             return None
 
-        versions = {v.semantic_version: v for v in self._blocks[name]}
+        versions = {v.semantic_version: v for v in self._blocks[name].values()}
         best_version = spec.select(versions.keys())
 
         if best_version is None:
