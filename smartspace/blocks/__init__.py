@@ -1,3 +1,6 @@
+import inspect
+from typing import cast
+
 import smartspace.core
 import smartspace.utils
 
@@ -14,8 +17,6 @@ def load(
     block_set = block_set or smartspace.core.BlockSet()
     if not path:
         block_set.add(smartspace.core.User)
-
-    smartspace.core.block_scope.set(block_set)
 
     _path = path or dirname(__file__)
     if isfile(_path):
@@ -34,7 +35,11 @@ def load(
         if file_path in existing_modules:
             module = existing_modules[file_path]
         else:
-            module_path = file_path.removeprefix(_path).replace("/", ".")[:-3]
+            module_path = (
+                file_path.removeprefix(_path).replace("/", ".")[:-3]
+                if file_path != _path
+                else file_path[:-3]
+            )
             module_name = module_path.replace("/", ".")
 
             if path is None:
@@ -42,11 +47,30 @@ def load(
                     module_path, package="smartspace.blocks"
                 )
             else:
-                spec = importlib.util.spec_from_file_location(module_name, file_path)
-                if spec and spec.loader:
-                    module = importlib.util.module_from_spec(spec)
-                    sys.modules[module_name] = module
-                    existing_modules[file_path] = module
-                    spec.loader.exec_module(module)
+                if module_name in sys.modules:
+                    module = sys.modules[module_name]
+                else:
+                    spec = importlib.util.spec_from_file_location(
+                        module_name, file_path
+                    )
+                    if spec and spec.loader:
+                        module = importlib.util.module_from_spec(spec)
+                        sys.modules[module_name] = module
+                        existing_modules[file_path] = module
+                        spec.loader.exec_module(module)
+
+        if not module:
+            continue
+
+        for name in dir(module):
+            item = getattr(module, name)
+            if (
+                smartspace.utils._issubclass(item, smartspace.core.Block)
+                and item != smartspace.core.Block
+                and item != smartspace.core.WorkSpaceBlock
+                and not inspect.isabstract(item)
+            ):
+                block_type = cast(type[smartspace.core.Block], item)
+                block_set.add(block_type)
 
     return block_set

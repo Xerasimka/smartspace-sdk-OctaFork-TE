@@ -59,9 +59,6 @@ R = TypeVar("R")
 P = ParamSpec("P")
 
 
-block_scope: contextvars.ContextVar["BlockSet"] = contextvars.ContextVar("block_scope")
-
-
 def _get_pin_type_from_parameter_kind(kind: inspect._ParameterKind) -> PinType:
     if (
         kind == inspect._ParameterKind.KEYWORD_ONLY
@@ -1220,16 +1217,7 @@ class BlockSet:
 class MetaBlock(type):
     def __new__(cls, name, bases, attrs):
         block_type = super().__new__(cls, name, bases, attrs)
-        if (
-            name != "Block"
-            and name != "WorkSpaceBlock"
-            and not inspect.isabstract(block_type)
-        ):
-            block_type.name = block_type.__name__.split("_")[0]
-
-            block_set = block_scope.get(None)
-            if block_set:
-                block_set.add(block_type)
+        block_type.name = block_type.__name__.split("_")[0]
 
         return block_type
 
