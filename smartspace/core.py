@@ -59,6 +59,9 @@ R = TypeVar("R")
 P = ParamSpec("P")
 
 
+block_scope: contextvars.ContextVar["BlockSet"] = contextvars.ContextVar("block_scope")
+
+
 def _get_pin_type_from_parameter_kind(kind: inspect._ParameterKind) -> PinType:
     if (
         kind == inspect._ParameterKind.KEYWORD_ONLY
@@ -1186,9 +1189,35 @@ class ReadOnlyDict(Mapping):
         return iter(self._data)
 
 
-class MetaBlock(type):
-    _all_block_types: "ClassVar[dict[str, list[type[Block]]]]" = {}
+class BlockSet:
+    def __init__(self):
+        self._blocks: dict[str, list[type[Block]]] = {}
 
+    @property
+    def all(self) -> "Mapping[str, list[type[Block]]]":
+        return ReadOnlyDict(self._blocks)
+
+    def add(self, block: type["Block"]):
+        if block.name not in self._blocks:
+            self._blocks[block.name] = []
+
+        self._blocks[block.name].append(block)
+
+    def find(self, name: str, version: str):
+        spec = semantic_version.NpmSpec(version)
+        if name not in self._blocks:
+            return None
+
+        versions = {v.semantic_version: v for v in self._blocks[name]}
+        best_version = spec.select(versions.keys())
+
+        if best_version is None:
+            return None
+
+        return versions[best_version]
+
+
+class MetaBlock(type):
     def __new__(cls, name, bases, attrs):
         block_type = super().__new__(cls, name, bases, attrs)
         if (
@@ -1197,10 +1226,10 @@ class MetaBlock(type):
             and not inspect.isabstract(block_type)
         ):
             block_type.name = block_type.__name__.split("_")[0]
-            if block_type.name not in cls._all_block_types:
-                cls._all_block_types[block_type.name] = []
 
-            cls._all_block_types[block_type.name].append(block_type)
+            block_set = block_scope.get(None)
+            if block_set:
+                block_set.add(block_type)
 
         return block_type
 
@@ -1216,23 +1245,6 @@ class MetaBlock(type):
         self._input_pin_type_adapters: dict[str, dict[str, TypeAdapter]] = {}
         self._output_pin_type_adapters: dict[str, dict[str, TypeAdapter]] = {}
         self._state_type_adapters: dict[str, TypeAdapter] = {}
-
-    def find(self, name: str, version: str) -> "type[Block] | None":
-        spec = semantic_version.NpmSpec(version)
-        if name not in self._all_block_types:
-            return None
-
-        versions = {v.semantic_version: v for v in self._all_block_types[name]}
-        best_version = spec.select(versions.keys())
-
-        if best_version is None:
-            return None
-
-        return versions[best_version]
-
-    @property
-    def all(self) -> "Mapping[str, list[type[Block]]]":
-        return ReadOnlyDict(self._all_block_types)
 
     def _set_input_pin_type_adapter(
         self, port: str, pin: str, type_adapter: TypeAdapter

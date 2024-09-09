@@ -30,7 +30,7 @@ class BlockPinRef(BaseModel):
 class InputPinInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     sticky: bool
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
     generics: dict[
@@ -46,7 +46,7 @@ class InputPinInterface(BaseModel):
 class OutputPinInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     json_schema: Annotated[dict[str, Any], Field(alias="schema")]
     generics: dict[
         str, BlockPinRef
@@ -59,7 +59,7 @@ class OutputPinInterface(BaseModel):
 class PortInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     inputs: dict[str, InputPinInterface]
     outputs: dict[str, OutputPinInterface]
     type: PortType
@@ -75,7 +75,7 @@ class StateInterface(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     scope: list[BlockPinRef]
     default: Any
 
@@ -87,7 +87,7 @@ class FunctionInterface(BaseModel):
 class BlockInterface(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    metadata: dict = {}
+    metadata: dict[str, Any] = {}
     ports: dict[str, PortInterface]
     state: dict[str, StateInterface]
 
