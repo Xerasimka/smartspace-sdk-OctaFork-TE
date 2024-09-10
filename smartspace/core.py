@@ -287,16 +287,24 @@ def _get_tool_pins(fn: Callable, port_name: str | None = None) -> ToolPins:
     )
 
 
+def _get_default(cls, field_name) -> tuple[bool, Any]:
+    no_default = "__no_default__"
+    default_value = getattr(cls, field_name, no_default)
+    if default_value is not no_default:
+        return (True, default_value)
+
+    return (False, None)
+
+
 class Metadata:
     def __init__(self, **kwargs):
         self.data = kwargs
 
 
-GenericSetterT = TypeVar("GenericSetterT")
+GenericSchemaT = TypeVar("GenericSchemaT")
 
 
-class GenericSetter(Generic[GenericSetterT]):
-    schema: dict[str, Any]
+class GenericSchema(Generic[GenericSchemaT], dict[str, Any]): ...
 
 
 class Config: ...
@@ -379,9 +387,8 @@ def _get_input_pin_from_metadata(
                 f"'parent' must be given when getting the interface for a {pin_type} pin"
             )
 
-        no_default = "__no_default__"
-        default_value = getattr(parent, field_name, no_default)
-        if default_value is not no_default:
+        has_default, default_value = _get_default(parent, field_name)
+        if has_default:
             required = False
             default = default_value
 
@@ -430,10 +437,8 @@ def _get_state_from_metadata(
     if state is None:
         return None
 
-    no_default = "__no_default__"
-    default = getattr(block_type, field_name, no_default)
-
-    if default is no_default:
+    has_default, default = _get_default(block_type, field_name)
+    if not has_default:
         raise ValueError("State() attributes must have a default value")
 
     state_type = get_args(field_type)[0]
@@ -926,14 +931,19 @@ def _get_pins(
 
         origin = get_origin(field_type)
 
-        if origin is GenericSetter:
+        if origin is GenericSchema:
             type_var = get_args(field_type)[0]
             generic_name = type_var.__name__
             if generic_name in inputs:
                 inputs[field_name] = inputs[generic_name]
                 del inputs[generic_name]
 
+            has_default, default = _get_default(block_type, field_name)
+            if has_default:
+                inputs[field_name].default = default
+
             inputs[field_name].metadata["hidden"] = False
+            inputs[field_name].metadata["config"] = True
             inputs[field_name].metadata.update(metadata)
 
             block_type._input_pin_type_adapters[port_name][field_name] = (
@@ -1328,14 +1338,19 @@ class MetaBlock(type):
 
                 origin = get_origin(field_type)
 
-                if origin is GenericSetter:
+                if origin is GenericSchema:
                     type_var = get_args(field_type)[0]
                     generic_name = type_var.__name__
                     if generic_name in ports:
                         ports[port_name] = ports[generic_name]
                         del ports[generic_name]
 
+                    has_default, default = _get_default(cls, port_name)
+                    if has_default:
+                        ports[port_name].inputs[""].default = default
+
                     ports[port_name].inputs[""].metadata["hidden"] = False
+                    ports[port_name].inputs[""].metadata["config"] = True
                     ports[port_name].inputs[""].metadata.update(metadata)
 
                     cls._input_pin_type_adapters[port_name] = {
