@@ -639,7 +639,7 @@ def _get_pins(
             )
 
             inputs[generic_name] = InputPinInterface(
-                metadata={"generic": True},
+                metadata={"generic": True, "hidden": True},
                 sticky=True,
                 json_schema=type_adapter.json_schema(),
                 generics={},
@@ -693,7 +693,7 @@ def _get_pins(
                 )
 
                 inputs[generic_name] = InputPinInterface(
-                    metadata={"generic": True},
+                    metadata={"generic": True, "hidden": True},
                     sticky=True,
                     json_schema=type_adapter.json_schema(),
                     generics={},
@@ -747,7 +747,7 @@ def _get_pins(
                         )
 
                         inputs[generic_name] = InputPinInterface(
-                            metadata={"generic": True},
+                            metadata={"generic": True, "hidden": True},
                             sticky=True,
                             json_schema=type_adapter.json_schema(),
                             generics={},
@@ -793,7 +793,7 @@ def _get_pins(
                             )
 
                             inputs[generic_name] = InputPinInterface(
-                                metadata={"generic": True},
+                                metadata={"generic": True, "hidden": True},
                                 sticky=True,
                                 json_schema=type_adapter.json_schema(),
                                 generics={},
@@ -833,7 +833,7 @@ def _get_pins(
                         )
 
                         inputs[generic_name] = InputPinInterface(
-                            metadata={"generic": True},
+                            metadata={"generic": True, "hidden": True},
                             sticky=True,
                             json_schema=type_adapter.json_schema(),
                             generics={},
@@ -879,7 +879,7 @@ def _get_pins(
                             )
 
                             inputs[generic_name] = InputPinInterface(
-                                metadata={"generic": True},
+                                metadata={"generic": True, "hidden": True},
                                 sticky=True,
                                 json_schema=type_adapter.json_schema(),
                                 generics={},
@@ -907,7 +907,7 @@ def _get_pins(
                 )
 
                 inputs[generic_name] = InputPinInterface(
-                    metadata={"generic": True},
+                    metadata={"generic": True, "hidden": True},
                     sticky=True,
                     json_schema=type_adapter.json_schema(),
                     generics={},
@@ -1067,7 +1067,7 @@ def _get_ports_and_state(block_type: "type[Block]") -> PortsAndState:
             metadata={},
             inputs={
                 "": InputPinInterface(
-                    metadata={"generic": True},
+                    metadata={"generic": True, "hidden": True},
                     sticky=True,
                     json_schema=type_adapter.json_schema(),
                     generics={},
@@ -1303,7 +1303,7 @@ class MetaBlock(type):
                             metadata={},
                             inputs={
                                 "": InputPinInterface(
-                                    metadata={"generic": True},
+                                    metadata={"generic": True, "hidden": True},
                                     sticky=True,
                                     json_schema=type_adapter.json_schema(),
                                     generics={},
