@@ -1286,6 +1286,7 @@ class MetaBlock(type):
                     metadata = attribute.metadata.copy()
                     if type(attribute) is Callback:
                         metadata["callback"] = True
+                        metadata["hidden"] = True
 
                     ports[attribute_name] = PortInterface(
                         metadata=metadata,
