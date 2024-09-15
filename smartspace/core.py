@@ -342,15 +342,15 @@ def _get_input_pin_from_metadata(
     metadata: dict[str, Any] = {}
 
     is_input_channel = get_origin(field_type) is InputChannel
+    args = get_args(field_type)
     if is_input_channel:
-        args = get_args(field_type)
         if not args or len(args) != 1:
             raise Exception("Input channels must have exactly one type.")
 
         input_type: type = args[0]
     else:
-        input_type = field_type
-        for m in getattr(input_type, "__metadata__", []):
+        input_type = field_type if not args or len(args) == 0 else args[0]
+        for m in getattr(field_type, "__metadata__", []):
             if isinstance(m, Config):
                 config = m
 
@@ -388,6 +388,10 @@ def _get_input_pin_from_metadata(
             )
 
         has_default, default_value = _get_default(parent, field_name)
+        if config and not has_default and input_type is bool:
+            default = False
+            required = False
+
         if has_default:
             required = False
             default = default_value
@@ -477,6 +481,7 @@ def _map_type_vars(
                 model_config = ConfigDict(
                     title=new_type.__name__, json_schema_extra=adapter.json_schema()
                 )
+                __pydantic_core_schema__ = adapter.core_schema
 
             type_var_defs[new_type] = TypeAdapter(new_type)
             return TempTypeVarModel2
@@ -497,6 +502,7 @@ def _map_type_vars(
                                 title=arg.__name__,
                                 json_schema_extra=adapter.json_schema(),
                             )
+                            __pydantic_core_schema__ = adapter.core_schema
 
                         type_var_defs[arg] = TypeAdapter(arg)
 
