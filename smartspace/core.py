@@ -25,7 +25,7 @@ from typing import (
 
 import semantic_version
 from more_itertools import first
-from pydantic import BaseModel, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 from pydantic._internal._generics import get_args, get_origin
 
 from smartspace.enums import ChannelEvent
@@ -481,7 +481,6 @@ def _map_type_vars(
                 model_config = ConfigDict(
                     title=new_type.__name__, json_schema_extra=adapter.json_schema()
                 )
-                __pydantic_validator__ = adapter.validator
 
             type_var_defs[new_type] = TypeAdapter(new_type)
             return TempTypeVarModel2
@@ -502,7 +501,6 @@ def _map_type_vars(
                                 title=arg.__name__,
                                 json_schema_extra=adapter.json_schema(),
                             )
-                            __pydantic_validator__ = adapter.validator
 
                         type_var_defs[arg] = TypeAdapter(arg)
 
@@ -1352,32 +1350,33 @@ class MetaBlock(type):
                         ports[port_name] = ports[generic_name]
                         del ports[generic_name]
 
-                    has_default, default = _get_default(cls, port_name)
-                    if has_default:
-                        ports[port_name].inputs[""].default = default
+                    if port_name in ports:
+                        has_default, default = _get_default(cls, port_name)
+                        if has_default:
+                            ports[port_name].inputs[""].default = default
 
-                    ports[port_name].inputs[""].metadata["hidden"] = False
-                    ports[port_name].inputs[""].metadata["config"] = True
-                    ports[port_name].inputs[""].metadata.update(metadata)
+                        ports[port_name].inputs[""].metadata["hidden"] = False
+                        ports[port_name].inputs[""].metadata["config"] = True
+                        ports[port_name].inputs[""].metadata.update(metadata)
 
-                    cls._input_pin_type_adapters[port_name] = {
-                        "": cls._input_pin_type_adapters[generic_name][""]
-                    }
-                    del cls._input_pin_type_adapters[generic_name]
+                        cls._input_pin_type_adapters[port_name] = {
+                            "": cls._input_pin_type_adapters[generic_name][""]
+                        }
+                        del cls._input_pin_type_adapters[generic_name]
 
-                    for port in ports.values():
-                        for pin in list(port.inputs.values()) + list(
-                            port.outputs.values()
-                        ):
-                            for g, pin_ref in pin.generics.items():
-                                if (
-                                    g == generic_name
-                                    and pin_ref.port == generic_name
-                                    and pin_ref.pin == ""
-                                ):
-                                    pin.generics[g] = BlockPinRef(
-                                        port=port_name, pin=""
-                                    )
+                        for port in ports.values():
+                            for pin in list(port.inputs.values()) + list(
+                                port.outputs.values()
+                            ):
+                                for g, pin_ref in pin.generics.items():
+                                    if (
+                                        g == generic_name
+                                        and pin_ref.port == generic_name
+                                        and pin_ref.pin == ""
+                                    ):
+                                        pin.generics[g] = BlockPinRef(
+                                            port=port_name, pin=""
+                                        )
 
             cls._class_interface = BlockInterface(
                 metadata=cls.metadata,
@@ -1598,7 +1597,11 @@ class Block(metaclass=MetaBlock):
     def _set_state(self, state: list[StateValue]):
         for s in state:
             adapter = self.__class__._state_type_adapters[s.state]
-            value = adapter.validate_python(s.value)
+            try:
+                value = adapter.validate_python(s.value)
+            except ValidationError:
+                value = s.value
+
             setattr(self, s.state, value)
 
     def _set_inputs(self, inputs: list[InputValue]):
@@ -1618,7 +1621,12 @@ class Block(metaclass=MetaBlock):
                 pin_index = ""
 
             adapter = self.__class__._input_pin_type_adapters[port_name][pin_name]
-            value = adapter.validate_python(input_value.value)
+
+            try:
+                value = adapter.validate_python(input_value.value)
+            except ValidationError as exc:
+                print(exc)
+                value = input_value.value
 
             if (
                 port_name in self._interface.ports
@@ -2231,6 +2239,11 @@ def callback() -> Callable[[Callable[Concatenate[B, P], Awaitable]], Callback[B,
     return callback_decorator
 
 
-class User(Block):
+UserMessageT = TypeVar("UserMessageT")
+
+
+class User(Block, Generic[UserMessageT]):
+    schema: GenericSchema[UserMessageT] = GenericSchema({"type": "string"})
+
     @step(output_name="response")
-    async def ask(self, message: str, schema: str) -> Any: ...
+    async def ask(self, message: str) -> UserMessageT: ...
