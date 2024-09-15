@@ -481,7 +481,7 @@ def _map_type_vars(
                 model_config = ConfigDict(
                     title=new_type.__name__, json_schema_extra=adapter.json_schema()
                 )
-                __pydantic_core_schema__ = adapter.core_schema
+                __pydantic_validator__ = adapter.validator
 
             type_var_defs[new_type] = TypeAdapter(new_type)
             return TempTypeVarModel2
@@ -502,7 +502,7 @@ def _map_type_vars(
                                 title=arg.__name__,
                                 json_schema_extra=adapter.json_schema(),
                             )
-                            __pydantic_core_schema__ = adapter.core_schema
+                            __pydantic_validator__ = adapter.validator
 
                         type_var_defs[arg] = TypeAdapter(arg)
 
