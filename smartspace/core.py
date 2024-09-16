@@ -16,6 +16,7 @@ from typing import (
     ClassVar,
     Concatenate,
     Generic,
+    Literal,
     Mapping,
     NamedTuple,
     ParamSpec,
@@ -461,6 +462,7 @@ def _get_state_from_metadata(
 
 def _map_type_vars(
     original_type: type,
+    mode: Literal["schema", "validation"],
 ) -> tuple[type, dict[TypeVar, TypeAdapter]]:
     type_var_defs: dict[TypeVar, TypeAdapter] = {}
 
@@ -475,12 +477,11 @@ def _map_type_vars(
             return _inner(new_type, depth + 1)
 
         if isinstance(new_type, TypeVar):
-            adapter = TypeAdapter(new_type)
 
             class TempTypeVarModel2(BaseModel):
-                model_config = ConfigDict(
-                    title=new_type.__name__, json_schema_extra=adapter.json_schema()
-                )
+                model_config = ConfigDict(title=new_type.__name__)
+                if mode == "validation":
+                    __pydantic_core_schema__ = {"type": "any"}
 
             type_var_defs[new_type] = TypeAdapter(new_type)
             return TempTypeVarModel2
@@ -494,13 +495,11 @@ def _map_type_vars(
             for arg in args:
                 if isinstance(arg, TypeVar):
                     if arg not in type_var_defs:
-                        adapter = TypeAdapter(arg)
 
                         class TempTypeVarModel(BaseModel):
-                            model_config = ConfigDict(
-                                title=arg.__name__,
-                                json_schema_extra=adapter.json_schema(),
-                            )
+                            model_config = ConfigDict(title=new_type.__name__)
+                            if mode == "validation":
+                                __pydantic_core_schema__ = {"type": "any"}
 
                         type_var_defs[arg] = TypeAdapter(arg)
 
@@ -538,15 +537,12 @@ class JsonSchemaWithGenerics(NamedTuple):
 
 
 def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
-    new_t, type_var_map = _map_type_vars(t)
-
+    new_t, type_var_map = _map_type_vars(t, mode="schema")
     generics = {name.__name__: adapter for name, adapter in type_var_map.items()}
+    json_schema = TypeAdapter(Any if new_t == inspect._empty else new_t).json_schema()
 
-    if new_t == inspect._empty:
-        new_t = Any
-
-    type_adapter = TypeAdapter(new_t)
-    json_schema = type_adapter.json_schema()
+    new_t, _ = _map_type_vars(t, mode="validation")
+    type_adapter = TypeAdapter(Any if new_t == inspect._empty else new_t)
 
     if "$defs" in json_schema:
         definitions: dict[str, dict[str, Any]] = json_schema["$defs"]
@@ -556,7 +552,7 @@ def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
         for name, definition in definitions.items():
             if "TempTypeVarModel" in name and "title" in definition:
                 title = definition["title"]
-                new_definitions[title] = definition
+                new_definitions[title] = {}
                 json_schema_str = json_schema_str.replace(name, title)
             else:
                 new_definitions[name] = definition
@@ -567,7 +563,7 @@ def _get_json_schema_with_generics(t: type) -> JsonSchemaWithGenerics:
     elif "title" in json_schema:
         title = json_schema["title"]
         if title in generics:
-            json_schema = {"$defs": {title: json_schema}, "$ref": "#/$defs/" + title}
+            json_schema = {"$defs": {title: {}}, "$ref": "#/$defs/" + title}
 
     return JsonSchemaWithGenerics(
         type_adapter=type_adapter,
