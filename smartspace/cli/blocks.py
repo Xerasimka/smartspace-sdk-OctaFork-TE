@@ -1,20 +1,49 @@
-import uuid
-from typing import Any
-
+import pydantic_core
+import requests
 import typer
-from more_itertools import first
 
 from smartspace.core import Block
 from smartspace.models import (
     BlockInterface,
-    CallbackCall,
-    DebugBlockRequest,
-    DebugBlockResult,
-    FlowValue,
-    ValueSourceRef,
+    BlockRunData,
 )
 
 app = typer.Typer()
+
+
+@app.command()
+def publish(path: str = ""):
+    import os
+    import zipfile
+
+    import smartspace.cli.auth
+    import smartspace.cli.config
+
+    config = smartspace.cli.config.load_config()
+
+    if not config["config_api_url"]:
+        print(
+            "You must set your API url before publishing blocks. Use 'smartspace config --api-url <Your SmartSpace API Url>'"
+        )
+        exit()
+
+    file_name = "blocks.zip"
+
+    zf = zipfile.ZipFile(file_name, "w")
+    for dirname, subdirs, files in os.walk(path):
+        zf.write(dirname)
+        for filename in files:
+            zf.write(os.path.join(dirname, filename))
+    zf.close()
+
+    with open(file_name, "rb") as f:
+        response = requests.post(
+            url=f"{config['config_api_url']}/blocksets",
+            headers={"Authorization": f"Bearer {smartspace.cli.auth.get_token()}"},
+            files={"file": f},
+        )
+
+        print(response)
 
 
 @app.command()
@@ -70,84 +99,40 @@ def debug(path: str = "", poll: bool = False):
         protocol=MyJSONProtocol(),
     )
 
-    blocks: list[tuple[BlockInterface, type[Block]]] = []
+    blocks: dict[str, dict[str, BlockInterface]] = {}
 
     async def on_message_override(message: Message):
         if isinstance(message, InvocationMessage) and message.target == "run_block":
-            request = DebugBlockRequest.model_validate(message.arguments[0])
+            request = BlockRunData.model_validate(message.arguments[0])
 
-            print(
-                f"Running block {request.block_definition.type.name} ({request.block_definition.type.version})"
-            )
+            print(f"Running block {request.name} ({request.version})")
 
-            block = first(
-                [
-                    block_type
-                    for block_interface, block_type in blocks
-                    if block_interface.name == request.block_definition.type.name
-                    and block_interface.version == request.block_definition.type.version
-                ]
-            )
+            block_type = Block.find(request.name, request.version)
 
-            outputs: list[FlowValue] = []
-            callbacks: list[DebugBlockResult.Callback] = []
-
-            def register_tool_callback(
-                tool_id: str,
-                tool_call_values: list[FlowValue],
-                callback: CallbackCall,
-            ):
-                callbacks.append(
-                    DebugBlockResult.Callback(
-                        tool_id=tool_id,
-                        tool_call_values=tool_call_values,
-                        callback=callback,
-                    )
+            if not block_type:
+                raise Exception(
+                    f"Could not find block with name {request.name} and version {request.version}"
                 )
 
-            def emit_output_value(value: Any, source: ValueSourceRef) -> FlowValue:
-                flow_value = FlowValue(
-                    id=uuid.uuid4(),
-                    value_source=source,
-                    parent_ids=[parent.id for parent in request.inputs.values()],
-                    value=value,
+            block_instance = block_type()
+
+            block_instance._load(
+                context=request.context,
+                state=request.state,
+                inputs=request.inputs,
+                dynamic_ports=request.dynamic_ports,
+                dynamic_output_pins=request.dynamic_output_pins,
+                dynamic_input_pins=request.dynamic_input_pins,
+            )
+
+            async for m in block_instance._run_function(request.function):
+                message = CompletionMessage(
+                    message.invocation_id,
+                    m.model_dump(by_alias=True, mode="json"),
+                    headers=client._headers,
                 )
-                outputs.append(flow_value)
 
-                return flow_value
-
-            block_instance = block(
-                register_tool_callback=register_tool_callback,
-                emit_output_value=emit_output_value,
-                definition=request.block_definition,
-                flow_context=request.flow_context,
-            )
-
-            step_instance = block_instance._steps_instances[request.step_id]
-
-            step_kwargs: dict[str, Any] = {
-                input_name: value.value for input_name, value in request.inputs.items()
-            }
-
-            await step_instance.run(**step_kwargs)
-
-            updated_state = {
-                state_name: getattr(block_instance, state_name, None)
-                for state_name in request.block_definition.states.keys()
-            }
-
-            result = DebugBlockResult(
-                states=updated_state,
-                outputs=outputs,
-                callbacks=callbacks,
-            )
-
-            message = CompletionMessage(
-                message.invocation_id,
-                result.model_dump(by_alias=True, mode="json"),
-                headers=client._headers,
-            )
-            await client._transport.send(message)
+                await client._transport.send(message)
         else:
             await SignalRClient._on_message(client, message)
 
@@ -164,63 +149,81 @@ def debug(path: str = "", poll: bool = False):
         await register_blocks(root_path)
 
     async def register_blocks(path: str):
-        found_blocks = [
-            (b.interface(version="debug"), b) for b in smartspace.blocks.load(path)
-        ]
-        new_blocks = [
-            b
-            for b in found_blocks
-            if not any(
-                [
-                    old_block[0].name == b[0].name
-                    and old_block[0].version == b[0].version
-                    for old_block in blocks
-                ]
-            )
-        ]
+        found_blocks = {
+            block_name: {
+                f"{version}-debug": block_type.interface()
+                for version, block_type in versions.items()
+            }
+            for block_name, versions in smartspace.blocks.load(path).items()
+        }
 
-        updated_blocks = [
-            b
-            for b in found_blocks
-            if any(
-                [
-                    old_block[0].name == b[0].name
-                    and old_block[0].version == b[0].version
-                    and old_block[0] != b[0]
-                    for old_block in blocks
-                ]
-            )
-        ]
+        new_blocks = {
+            found_block_name: {
+                version: block_interface
+                for version, block_interface in found_block_versions.items()
+                if not any(
+                    [
+                        old_block_name == found_block_name and version in old_versions
+                        for old_block_name, old_versions in blocks.items()
+                    ]
+                )
+            }
+            for found_block_name, found_block_versions in found_blocks.items()
+        }
 
-        removed_blocks = [
-            old_block
-            for old_block in blocks
-            if not any(
-                [
-                    old_block[0].name == b[0].name
-                    and old_block[0].version == b[0].version
-                    for b in found_blocks
-                ]
-            )
-        ]
+        removed_blocks = {
+            old_block_name: [
+                old_version
+                for old_version in old_versions.keys()
+                if old_block_name not in found_blocks
+                or old_version not in found_blocks[old_block_name]
+            ]
+            for old_block_name, old_versions in blocks.items()
+        }
 
-        for block_interface, _ in updated_blocks:
-            print(f"Updating {block_interface.name}")
-            data = block_interface.model_dump(by_alias=True, mode="json")
-            await client.send("registerblock", [data])
+        updated_blocks = {
+            found_block_name: {
+                version: block_interface
+                for version, block_interface in found_block_versions.items()
+                if any(
+                    [
+                        old_block_name == found_block_name
+                        and version in old_versions
+                        and block_interface != old_versions[version]
+                        for old_block_name, old_versions in blocks.items()
+                    ]
+                )
+            }
+            for found_block_name, found_block_versions in found_blocks.items()
+        }
 
-        for block_interface, _ in new_blocks:
-            print(f"Registering {block_interface.name}")
-            data = block_interface.model_dump(by_alias=True, mode="json")
-            await client.send("registerblock", [data])
+        for block_name, versions in updated_blocks.items():
+            for version, interface in versions.items():
+                print(f"Updating {block_name} ({version})")
+                blocks[block_name][version] = interface
 
-        for block_interface, _ in removed_blocks:
-            print(f"Removing {block_interface.name}")
-            data = block_interface.model_dump(by_alias=True, mode="json")
-            await client.send("removeblock", [data])
+        data = pydantic_core.to_jsonable_python(updated_blocks)
+        await client.send("registerblock", [data])
 
-        blocks.clear()
-        blocks.extend(found_blocks)
+        for block_name, versions in new_blocks.items():
+            if block_name not in blocks:
+                blocks[block_name] = {}
+
+            for version, interface in versions.items():
+                print(f"Registering {block_name} ({version})")
+                blocks[block_name][version] = interface
+
+        data = pydantic_core.to_jsonable_python(new_blocks)
+        await client.send("registerblock", [data])
+
+        for block_name, versions in removed_blocks.items():
+            for version in versions:
+                print(f"Removing {block_name} ({version})")
+                await client.send(
+                    "removeblock", [{"name": block_name, "version": version}]
+                )
+
+                del blocks[block_name][version]
 
         if not len(blocks):
             print("Found no blocks")

@@ -1515,7 +1515,7 @@ class Block(metaclass=MetaBlock):
         dynamic_input_pins: list[BlockPinRef] | None = None,
         dynamic_output_pins: list[BlockPinRef] | None = None,
     ):
-        for port_name, port_interface in self._interface.ports.items():
+        for port_name, port_interface in self.interface().ports.items():
             if (
                 port_interface.type == PortType.LIST
                 or port_interface.type == PortType.DICTIONARY
@@ -1561,7 +1561,7 @@ class Block(metaclass=MetaBlock):
                     )
                 )
 
-        for port_name, port_interface in self._interface.ports.items():
+        for port_name, port_interface in self.interface().ports.items():
             if port_interface.type == PortType.SINGLE:
                 setattr(
                     self,
@@ -1625,10 +1625,10 @@ class Block(metaclass=MetaBlock):
                 value = input_value.value
 
             if (
-                port_name in self._interface.ports
-                and pin_name in self._interface.ports[port_name].inputs
+                port_name in self.interface().ports
+                and pin_name in self.interface().ports[port_name].inputs
             ):
-                port_interface = self._interface.ports[port_name]
+                port_interface = self.interface().ports[port_name]
                 pin_interface = port_interface.inputs[pin_name]
 
                 if port_interface.is_function:
@@ -1701,7 +1701,7 @@ class Block(metaclass=MetaBlock):
     ) -> Any:
         port_id = port_name if not port_index else f"{port_name}.{port_index}"
 
-        port_interface = self._interface.ports[port_name]
+        port_interface = self.interface().ports[port_name]
         dynamic_inputs: list[tuple[str, str]] = []
         for (_port_name, _port_index), (
             _input_name,
