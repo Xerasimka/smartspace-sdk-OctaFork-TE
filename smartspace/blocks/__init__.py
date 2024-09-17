@@ -8,6 +8,7 @@ import smartspace.utils
 def load(
     path: str | None = None,
     block_set: smartspace.core.BlockSet | None = None,
+    force_reload: bool = False,
 ) -> smartspace.core.BlockSet:
     import importlib.util
     import pathlib
@@ -32,7 +33,7 @@ def load(
         if file_path == __file__ or file_path.endswith("__main__.py"):
             continue
 
-        if file_path in existing_modules:
+        if not force_reload and file_path in existing_modules:
             module = existing_modules[file_path]
         else:
             module_path = (
@@ -47,7 +48,7 @@ def load(
                     module_path, package="smartspace.blocks"
                 )
             else:
-                if module_name in sys.modules:
+                if not force_reload and module_name in sys.modules:
                     module = sys.modules[module_name]
                 else:
                     spec = importlib.util.spec_from_file_location(

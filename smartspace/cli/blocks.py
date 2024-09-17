@@ -2,9 +2,8 @@ import pydantic_core
 import requests
 import typer
 
-from smartspace.core import Block
+from smartspace.core import BlockSet
 from smartspace.models import (
-    BlockInterface,
     BlockRunData,
 )
 
@@ -12,10 +11,11 @@ app = typer.Typer()
 
 
 @app.command()
-def publish(path: str = ""):
+def publish(name: str, path: str = ""):
     import os
     import zipfile
 
+    import smartspace.blocks
     import smartspace.cli.auth
     import smartspace.cli.config
 
@@ -28,6 +28,15 @@ def publish(path: str = ""):
         exit()
 
     file_name = "blocks.zip"
+    if os.path.exists(file_name):
+        os.remove(file_name)
+
+    block_set = smartspace.blocks.load(path)
+
+    print("Publishing the following blocks:")
+    for name, versions in block_set.all.items():
+        for version, block_type in versions.items():
+            print(f"{name} ({version})")
 
     zf = zipfile.ZipFile(file_name, "w")
     for dirname, subdirs, files in os.walk(path):
@@ -38,12 +47,17 @@ def publish(path: str = ""):
 
     with open(file_name, "rb") as f:
         response = requests.post(
-            url=f"{config['config_api_url']}/blocksets",
+            url=f"{config['config_api_url']}/blocksets/{name}",
             headers={"Authorization": f"Bearer {smartspace.cli.auth.get_token()}"},
             files={"file": f},
         )
+        if response.status_code == 200:
+            print("Published!")
+        else:
+            print(f"Error: {response.text}")
 
-        print(response)
+    if os.path.exists(file_name):
+        os.remove(file_name)
 
 
 @app.command()
@@ -64,7 +78,6 @@ def debug(path: str = "", poll: bool = False):
     from watchdog.observers import Observer
     from watchdog.observers.polling import PollingObserver
 
-    import smartspace.blocks
     import smartspace.cli.auth
     import smartspace.cli.config
 
@@ -99,7 +112,7 @@ def debug(path: str = "", poll: bool = False):
         protocol=MyJSONProtocol(),
     )
 
-    blocks: dict[str, dict[str, BlockInterface]] = {}
+    block_set: BlockSet = BlockSet()
 
     async def on_message_override(message: Message):
         if isinstance(message, InvocationMessage) and message.target == "run_block":
@@ -107,7 +120,7 @@ def debug(path: str = "", poll: bool = False):
 
             print(f"Running block {request.name} ({request.version})")
 
-            block_type = Block.find(request.name, request.version)
+            block_type = block_set.find(request.name, request.version)
 
             if not block_type:
                 raise Exception(
@@ -125,14 +138,18 @@ def debug(path: str = "", poll: bool = False):
                 dynamic_input_pins=request.dynamic_input_pins,
             )
 
-            async for m in block_instance._run_function(request.function):
-                message = CompletionMessage(
-                    message.invocation_id,
-                    m.model_dump(by_alias=True, mode="json"),
-                    headers=client._headers,
-                )
+            messages: list[dict] = []
 
-                await client._transport.send(message)
+            async for m in block_instance._run_function(request.function):
+                messages.append(m.model_dump(by_alias=True, mode="json"))
+
+            message = CompletionMessage(
+                getattr(message, "invocation_id", None)
+                or getattr(message, "invocationId", ""),
+                messages,
+                headers=client._headers,
+            )
+            await client._transport.send(message)
         else:
             await SignalRClient._on_message(client, message)
 
@@ -149,12 +166,15 @@ def debug(path: str = "", poll: bool = False):
         await register_blocks(root_path)
 
     async def register_blocks(path: str):
+        nonlocal block_set
+        block_set = smartspace.blocks.load(path)
+        blocks = block_set.all
         found_blocks = {
             block_name: {
-                f"{version}-debug": block_type.interface()
+                version: block_type.interface()
                 for version, block_type in versions.items()
             }
-            for block_name, versions in smartspace.blocks.load(path).items()
+            for block_name, versions in blocks.items()
         }
 
         new_blocks = {
@@ -200,18 +220,13 @@ def debug(path: str = "", poll: bool = False):
         for block_name, versions in updated_blocks.items():
             for version, interface in versions.items():
                 print(f"Updating {block_name} ({version})")
-                blocks[block_name][version] = interface
 
         data = pydantic_core.to_jsonable_python(updated_blocks)
         await client.send("registerblock", [data])
 
         for block_name, versions in new_blocks.items():
-            if block_name not in blocks:
-                blocks[block_name] = {}
-
             for version, interface in versions.items():
                 print(f"Registering {block_name} ({version})")
-                blocks[block_name][version] = interface
 
         data = pydantic_core.to_jsonable_python(new_blocks)
         await client.send("registerblock", [data])
@@ -222,8 +237,6 @@ def debug(path: str = "", poll: bool = False):
                 await client.send(
                     "removeblock", [{"name": block_name, "version": version}]
                 )
-
-                del blocks[block_name][version]
 
         if not len(blocks):
             print("Found no blocks")
