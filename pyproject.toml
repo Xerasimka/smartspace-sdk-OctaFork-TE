@@ -30,7 +30,6 @@ msal = "^1.29.0"
 pysignalr = {git = "https://github.com/baking-bad/pysignalr"}
 watchdog = "4.0.1"
 more-itertools = "^10.3.0"
-pymssql = "^2.3.0"
 jsonpath-ng = "^1.6.1"
 semantic-version = "^2.10.0"
 pydantic = "^2.8.2"
