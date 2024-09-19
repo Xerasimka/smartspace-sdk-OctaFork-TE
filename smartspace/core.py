@@ -1620,8 +1620,7 @@ class Block(metaclass=MetaBlock):
 
             try:
                 value = adapter.validate_python(input_value.value)
-            except ValidationError as exc:
-                print(exc)
+            except ValidationError:
                 value = input_value.value
 
             if (

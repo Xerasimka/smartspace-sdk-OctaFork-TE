@@ -31,7 +31,7 @@ def publish(name: str, path: str = ""):
     if os.path.exists(file_name):
         os.remove(file_name)
 
-    block_set = smartspace.blocks.load(path)
+    block_set = smartspace.blocks.load(path, force_reload=True)
 
     print("Publishing the following blocks:")
     for name, versions in block_set.all.items():
@@ -78,6 +78,7 @@ def debug(path: str = "", poll: bool = False):
     from watchdog.observers import Observer
     from watchdog.observers.polling import PollingObserver
 
+    import smartspace.blocks
     import smartspace.cli.auth
     import smartspace.cli.config
 
@@ -167,14 +168,16 @@ def debug(path: str = "", poll: bool = False):
 
     async def register_blocks(path: str):
         nonlocal block_set
-        block_set = smartspace.blocks.load(path)
-        blocks = block_set.all
+
+        new_block_set = smartspace.blocks.load(path, force_reload=True)
+        old_blocks = block_set.all
+
         found_blocks = {
             block_name: {
                 version: block_type.interface()
                 for version, block_type in versions.items()
             }
-            for block_name, versions in blocks.items()
+            for block_name, versions in new_block_set.all.items()
         }
 
         new_blocks = {
@@ -184,7 +187,7 @@ def debug(path: str = "", poll: bool = False):
                 if not any(
                     [
                         old_block_name == found_block_name and version in old_versions
-                        for old_block_name, old_versions in blocks.items()
+                        for old_block_name, old_versions in old_blocks.items()
                     ]
                 )
             }
@@ -198,7 +201,7 @@ def debug(path: str = "", poll: bool = False):
                 if old_block_name not in found_blocks
                 or old_version not in found_blocks[old_block_name]
             ]
-            for old_block_name, old_versions in blocks.items()
+            for old_block_name, old_versions in old_blocks.items()
         }
 
         updated_blocks = {
@@ -209,27 +212,35 @@ def debug(path: str = "", poll: bool = False):
                     [
                         old_block_name == found_block_name
                         and version in old_versions
-                        and block_interface != old_versions[version]
-                        for old_block_name, old_versions in blocks.items()
+                        and block_interface != old_versions[version].interface()
+                        for old_block_name, old_versions in old_blocks.items()
                     ]
                 )
             }
             for found_block_name, found_block_versions in found_blocks.items()
         }
 
+        has_updated_blocks = False
+
         for block_name, versions in updated_blocks.items():
             for version, interface in versions.items():
+                has_updated_blocks = True
                 print(f"Updating {block_name} ({version})")
 
-        data = pydantic_core.to_jsonable_python(updated_blocks)
-        await client.send("registerblock", [data])
+        if has_updated_blocks:
+            data = pydantic_core.to_jsonable_python(updated_blocks)
+            await client.send("registerblock", [data])
+
+        has_new_blocks = False
 
         for block_name, versions in new_blocks.items():
             for version, interface in versions.items():
+                has_new_blocks = True
                 print(f"Registering {block_name} ({version})")
 
-        data = pydantic_core.to_jsonable_python(new_blocks)
-        await client.send("registerblock", [data])
+        if has_new_blocks:
+            data = pydantic_core.to_jsonable_python(new_blocks)
+            await client.send("registerblock", [data])
 
         for block_name, versions in removed_blocks.items():
             for version in versions:
@@ -238,8 +249,10 @@ def debug(path: str = "", poll: bool = False):
                     "removeblock", [{"name": block_name, "version": version}]
                 )
 
-        if not len(blocks):
+        if not len(new_block_set.all):
             print("Found no blocks")
+
+        block_set = new_block_set
 
     client.on_open(on_open)
     client.on_close(on_close)
