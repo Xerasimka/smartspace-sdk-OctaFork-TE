@@ -497,7 +497,7 @@ def _map_type_vars(
                     if arg not in type_var_defs:
 
                         class TempTypeVarModel(BaseModel):
-                            model_config = ConfigDict(title=new_type.__name__)
+                            model_config = ConfigDict(title=arg.__name__)
                             if mode == "validation":
                                 __pydantic_core_schema__ = {"type": "any"}
 
