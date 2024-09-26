@@ -29,6 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install toml
 
+      - name: Build package
+        run: |
+          peotry build
+
       - name: Get version from pyproject.toml
         run: echo "PACKAGE_VERSION=v$(python -c 'import toml; print(toml.load("pyproject.toml")["tool"]["poetry"]["version"])')" >> $GITHUB_ENV
 
