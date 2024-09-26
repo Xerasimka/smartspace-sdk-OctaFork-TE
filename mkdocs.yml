@@ -1,25 +1,116 @@
-site_name: Smartspace Flows
+site_name: Smartspace Workflow Documentation
 site_url: "https://redesigned-happiness-lml15p6.pages.github.io/"
 repo_url: "https://github.com/Smartspace-ai/smartspace-flows"
 
 theme:
+  features:
+    - navigation.expand
+    - navigation.footer
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - toc.follow
+  favicon: assets/smartspace-favicon.webp
+  font:
+    text: Roboto
+    code: Roboto Mono
+  icon:
+    repo: fontawesome/brands/git-alt
+  logo: assets/smartspace_small_logo_white.png
   name: material
   palette:
     scheme: default
     primary: custom
     accent: custom
-  font:
-    text: Roboto
-    code: Roboto Mono
-  logo: assets/smartspace-logo-white.svg
-  favicon: assets/smartspace-favicon.webp
-  icon:
-    repo: fontawesome/brands/git-alt
+
+markdown_extensions:
+  - attr_list
+  - toc:
+      permalink: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
 
 extra_css:
   - stylesheets/extra.css
 nav:
   - Home: index.md
+  - CLI: cli.md
+  - Block Reference:
+      - Overview: block-reference/index.md
+      - Chunking:
+          - SemanticChunk: block-reference/SemanticChunk.md
+          - SentenceChunk: block-reference/SentenceChunk.md
+          - TokenChunk: block-reference/TokenChunk.md
+          - WindowChunk: block-reference/WindowChunk.md
+      - Function:
+          - Collect: block-reference/Collect.md
+          - Concat: block-reference/Concat.md
+          - First: block-reference/First.md
+          - Flatten: block-reference/Flatten.md
+          - ForEach: block-reference/ForEach.md
+          - HTTPRequest: block-reference/HTTPRequest.md
+          - Map: block-reference/Map.md
+          - MergeLists: block-reference/MergeLists.md
+          - Slice: block-reference/Slice.md
+      - JSON:
+          - Get: block-reference/Get.md
+          - ParseJson: block-reference/ParseJson.md
+      - Text:
+          - JoinStrings: block-reference/JoinStrings.md
+          - RegexMatch: block-reference/RegexMatch.md
+          - SplitString: block-reference/SplitString.md
+          - StringTemplate: block-reference/StringTemplate.md
+          - StringTruncator: block-reference/StringTruncator.md
+      - Misc:
+          - Buffer: block-reference/Buffer.md
+          - Cast: block-reference/Cast.md
+          - Count: block-reference/Count.md
+          - CreateList: block-reference/CreateList.md
+          - CreateObject: block-reference/CreateObject.md
+          - TypeSwitch: block-reference/TypeSwitch.md
+          - UnpackList: block-reference/UnpackList.md
+          - UnpackObject: block-reference/UnpackObject.md
+      - SmartSpace Blocks:
+          - Data:
+              - GetAllDocuments: block-reference/GetAllDocuments.md
+              - GetFileContent: block-reference/GetFileContent.md
+              - VectorSearch: block-reference/VectorSearch.md
+          - LLM:
+              - Analyzer: block-reference/Analyzer.md
+              - LLM: block-reference/LLM.md
+              - LLMSelect: block-reference/LLMSelect.md
+              - LLMWithTools: block-reference/LLMWithTools.md
+          - Utils:
+              - CreateResponseWithSources: block-reference/CreateResponseWithSources.md
+      - Obsolete:
+          - GetJsonField: block-reference/GetJsonField.md
+      # - Agent:
+          # - LLM: block-reference/llm.md
+      # - Data:
+          # - SQLServer: block-reference/SQLServer.md
+  - Concepts:
+      - Channels: concepts/channels.md
+      - Blocks:
+          - Overview: concepts/blocks/index.md
+          - Custom Blocks: concepts/blocks/custom-blocks-building.md
+          - Connections: concepts/blocks/connections.md
+#     - Connections:
+  #     - Building Flows:
+  #         - Flow Definition: concepts/flows/flow-definition.md
+  #         - Flow Deployment: concepts/flows/flow-deployment.md
+  #         - Flow Execution: concepts/flows/flow-execution.md
+      # - Overview: concepts/index.md
+  # - Getting Started: getting-started/index.md
+  # - Examples: examples/index.md
+  # - API Reference: api/index.md
+
+  # - Contributing: contributing.md
+  # - Changelog: changelog.md
 
 plugins:
   - search
@@ -32,8 +123,14 @@ plugins:
       version_selector: true
       css_dir: css
       javascript_dir: js
+  - macros:
+      module_name: docs/macros
 
 extra:
   version:
     provider: mike
     alias: true
+
+exclude_docs: |
+  BLOCK-TEMPLATE.md
+  BLOCK-TEMPLATE-SS.md
