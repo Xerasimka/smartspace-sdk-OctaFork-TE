@@ -3,7 +3,7 @@ name: Python package release
 on:
   push:
     branches:
-      - main
+      - develop
 
 jobs:
   build:
@@ -32,24 +32,13 @@ jobs:
           python -m poetry config virtualenvs.create false
           python -m poetry install
 
+      - name: Get version from pyproject.toml
+        run: python -m poetry version $(python -c 'import toml; print(toml.load("pyproject.toml")["tool"]["poetry"]["version"])').dev+$(git rev-parse --short HEAD)
+
       - name: Build package
         run: python -m poetry build
-
-      - name: Get version from pyproject.toml
-        run: echo "PACKAGE_VERSION=v$(python -c 'import toml; print(toml.load("pyproject.toml")["tool"]["poetry"]["version"])')" >> $GITHUB_ENV
 
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           skip-existing: true
-
-      - name: Create GitHub release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.PACKAGE_VERSION }}
-          release_name: ${{ env.PACKAGE_VERSION }}
-          draft: false
-          prerelease: false
