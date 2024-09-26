@@ -11,6 +11,7 @@ name = "smartspace-ai"
 version = "0.1.0"
 description = "Smartspace SDK"
 readme = "README.md"
+packages = [{ include = "smartspace" }]
 authors = ["David Gentile <david.gentile@smartspace.ai>", "Denver Hayward <denver.hayward@smartspace.ai>"]
 
 
