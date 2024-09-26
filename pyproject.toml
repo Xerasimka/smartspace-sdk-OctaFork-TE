@@ -9,7 +9,8 @@ filterwarnings = [
 [tool.poetry]
 name = "smartspace"
 version = "0.1.0"
-description = "Smartspace Flows"
+description = "Smartspace SDK"
+readme = "README.md"
 authors = ["David Gentile <david.gentile@smartspace.ai>", "Denver Hayward <denver.hayward@smartspace.ai>"]
 
 
