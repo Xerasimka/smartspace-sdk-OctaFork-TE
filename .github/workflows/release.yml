@@ -34,7 +34,7 @@ jobs:
 
       - name: Build package
         run: |
-          python -m peotry build
+          python -m poetry build
 
       - name: Get version from pyproject.toml
         run: echo "PACKAGE_VERSION=v$(python -c 'import toml; print(toml.load("pyproject.toml")["tool"]["poetry"]["version"])')" >> $GITHUB_ENV
