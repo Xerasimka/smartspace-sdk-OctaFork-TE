@@ -1344,13 +1344,13 @@ llama-index-llms-openai = ">=0.2.0,<0.3.0"
 
 [[package]]
 name = "llama-index-core"
-version = "0.11.13.post1"
+version = "0.11.14"
 description = "Interface between LLMs and your data"
 optional = false
 python-versions = "<4.0,>=3.8.1"
 files = [
-    {file = "llama_index_core-0.11.13.post1-py3-none-any.whl", hash = "sha256:b71021ac86644898e723098a38bfc5f5b98bccb89e194854610b94ce6e3caeec"},
-    {file = "llama_index_core-0.11.13.post1.tar.gz", hash = "sha256:2f2041cc176398f71be449e5aadcad261236fcbfdde9deb7d396512aecb3428a"},
+    {file = "llama_index_core-0.11.14-py3-none-any.whl", hash = "sha256:e63e5b1f4daa56952a7846cbbf0265b1288909efaea866216a4c6fb65daa2923"},
+    {file = "llama_index_core-0.11.14.tar.gz", hash = "sha256:6ff7be9f5bbb04be0d8064f76510edf79f8a9833ebae28b46261b274556827ca"},
 ]
 
 [package.dependencies]
@@ -1812,18 +1812,19 @@ pyyaml = ">=5.1"
 
 [[package]]
 name = "mkdocs-macros-plugin"
-version = "1.0.5"
+version = "1.2.0"
 description = "Unleash the power of MkDocs with macros and variables"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "mkdocs-macros-plugin-1.0.5.tar.gz", hash = "sha256:fe348d75f01c911f362b6d998c57b3d85b505876dde69db924f2c512c395c328"},
-    {file = "mkdocs_macros_plugin-1.0.5-py3-none-any.whl", hash = "sha256:f60e26f711f5a830ddf1e7980865bf5c0f1180db56109803cdd280073c1a050a"},
+    {file = "mkdocs-macros-plugin-1.2.0.tar.gz", hash = "sha256:7603b85cb336d669e29a8a9cc3af8b90767ffdf6021b3e023d5ec2e0a1f927a7"},
+    {file = "mkdocs_macros_plugin-1.2.0-py3-none-any.whl", hash = "sha256:3e442f8f37aa69710a69b5389e6b6cd0f54f4fcaee354aa57a61735ba8f97d27"},
 ]
 
 [package.dependencies]
 jinja2 = "*"
 mkdocs = ">=0.17"
+packaging = "*"
 python-dateutil = "*"
 pyyaml = "*"
 termcolor = "*"
@@ -4785,4 +4786,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "b252ebdebf55868459e61615eb5ce1a9c04322430a4644119f9b89d9b02f77ad"
+content-hash = "a652f28f9210e72e2f8fbb039d7ae1c92db61c3ce2e31eceb1e58dd67801f5c4"
