@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Smartspace blocks",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "smartspace",
+            "args": [
+                "blocks",
+                "debug",
+                "--poll",
+                "--path",
+                ".local"
+            ]
+        },
+        {
+            "name": "Debug doc_generator",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/docs/utils/block_doc_generator.py",
+            "args": [
+                "${workspaceFolder}/smartspace/blocks",
+                "${workspaceFolder}/docs/generated"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "console": "integratedTerminal"
+        }
+    ]
+}
