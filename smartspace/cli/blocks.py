@@ -110,7 +110,6 @@ def debug(path: str = "", poll: bool = False):
         url=f"{config['config_api_url']}debug"
         if config["config_api_url"].endswith("/")
         else f"{config['config_api_url']}/debug",
-        access_token_factory=smartspace.cli.auth.get_token,
         headers={"Authorization": f"Bearer {smartspace.cli.auth.get_token()}"},
         protocol=MyJSONProtocol(),
     )
