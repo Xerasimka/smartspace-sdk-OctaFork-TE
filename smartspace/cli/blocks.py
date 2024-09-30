@@ -168,44 +168,56 @@ def debug(path: str = "", poll: bool = False):
 
     block_set: BlockSet = BlockSet()
 
+    running = (
+        asyncio.Lock()
+    )  # temp fix to deal with server issue when running blocks in parallel
+
     async def on_message_override(message: Message):
         if isinstance(message, InvocationMessage) and message.target == "run_block":
-            request = BlockRunData.model_validate(message.arguments[0])
+            async with running:
+                request = BlockRunData.model_validate(message.arguments[0])
 
-            print(
-                f"Running step '{request.function}' on block '{request.name} ({request.version})'"
-            )
-
-            block_type = block_set.find(request.name, request.version)
-
-            if not block_type:
-                raise Exception(
-                    f"Could not find block with name {request.name} and version {request.version}"
+                print(
+                    f"Running '{request.name}({request.version}).{request.function}()'"
                 )
 
-            block_instance = block_type()
+                block_type = block_set.find(request.name, request.version)
 
-            block_instance._load(
-                context=request.context,
-                state=request.state,
-                inputs=request.inputs,
-                dynamic_ports=request.dynamic_ports,
-                dynamic_output_pins=request.dynamic_output_pins,
-                dynamic_input_pins=request.dynamic_input_pins,
-            )
+                if not block_type:
+                    raise Exception(
+                        f"Could not find block with name {request.name} and version {request.version}"
+                    )
 
-            messages: list[dict] = []
+                block_instance = block_type()
 
-            async for m in block_instance._run_function(request.function):
-                messages.append(m.model_dump(by_alias=True, mode="json"))
+                block_instance._load(
+                    context=request.context,
+                    state=request.state,
+                    inputs=request.inputs,
+                    dynamic_ports=request.dynamic_ports,
+                    dynamic_output_pins=request.dynamic_output_pins,
+                    dynamic_input_pins=request.dynamic_input_pins,
+                )
 
-            message = CompletionMessage(
-                getattr(message, "invocation_id", None)
-                or getattr(message, "invocationId", ""),
-                messages,
-                headers=client._headers,
-            )
-            await client._transport.send(message)
+                messages: List[dict] = []
+
+                async for m in block_instance._run_function(request.function):
+                    messages.append(m.model_dump(by_alias=True, mode="json"))
+
+                invocation_id = getattr(message, "invocation_id", None) or getattr(
+                    message, "invocationId", ""
+                )
+
+                message = CompletionMessage(
+                    invocation_id,
+                    messages,
+                    headers=client._headers,
+                )
+                print(
+                    f"Finished '{request.name}({request.version}).{request.function}()'"
+                )
+                await client._transport.send(message)
+                await asyncio.sleep(5)
         else:
             await SignalRClient._on_message(client, message)
 
