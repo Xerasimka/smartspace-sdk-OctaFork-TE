@@ -2279,6 +2279,6 @@ class User(Block, Generic[UserMessageT]):
     @step()
     async def ask(self, message: str): ...
 
-    # @callback()
-    # async def handle_response(self, response: UserMessageT):
-    #     self.response.send(response)
+    @callback()
+    async def handle_response(self, response: UserMessageT):
+        self.response.send(response)
