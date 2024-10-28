@@ -67,6 +67,7 @@ nav:
           - StringTemplate: block-reference/StringTemplate.md
           - StringTruncator: block-reference/StringTruncator.md
       - Misc:
+          - Append: block-reference/Append.md
           - Buffer: block-reference/Buffer.md
           - Cast: block-reference/Cast.md
           - Count: block-reference/Count.md
@@ -77,6 +78,7 @@ nav:
           - UnpackObject: block-reference/UnpackObject.md
       - SmartSpace Blocks:
           - Data:
+              - FileStore: block-reference/FileStore.md
               - GetAllDocuments: block-reference/GetAllDocuments.md
               - GetFileContent: block-reference/GetFileContent.md
               - VectorSearch: block-reference/VectorSearch.md
